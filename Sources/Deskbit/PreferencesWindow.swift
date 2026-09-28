@@ -127,6 +127,9 @@ final class PreferencesViewController: NSViewController {
     private let onRecordingChanged: (Bool) -> Void
     private let recorder: HotKeyRecorderView
     private let statusLabel = NSTextField(wrappingLabelWithString: "")
+    private let launchCheckbox = NSButton(checkboxWithTitle: "登录 Mac 时自动启动 Deskbit", target: nil, action: nil)
+    private let launchHint = NSTextField(wrappingLabelWithString: "")
+    private let openLoginItemsButton = NSButton(title: "打开系统设置…", target: nil, action: nil)
 
     init(
         shortcut: HotKeyShortcut?,
@@ -142,7 +145,7 @@ final class PreferencesViewController: NSViewController {
     required init?(coder: NSCoder) { nil }
 
     override func loadView() {
-        let root = NSView(frame: NSRect(x: 0, y: 0, width: 440, height: 170))
+        let root = NSView(frame: NSRect(x: 0, y: 0, width: 440, height: 290))
 
         let title = NSTextField(labelWithString: "新建便签快捷键：")
         title.font = .systemFont(ofSize: 13, weight: .medium)
@@ -176,6 +179,27 @@ final class PreferencesViewController: NSViewController {
         statusLabel.translatesAutoresizingMaskIntoConstraints = false
         root.addSubview(statusLabel)
 
+        let separator = NSBox()
+        separator.boxType = .separator
+        separator.translatesAutoresizingMaskIntoConstraints = false
+        root.addSubview(separator)
+
+        launchCheckbox.target = self
+        launchCheckbox.action = #selector(toggleLaunchAtLogin)
+        launchCheckbox.translatesAutoresizingMaskIntoConstraints = false
+        root.addSubview(launchCheckbox)
+
+        launchHint.font = .systemFont(ofSize: 11)
+        launchHint.textColor = .secondaryLabelColor
+        launchHint.translatesAutoresizingMaskIntoConstraints = false
+        root.addSubview(launchHint)
+
+        openLoginItemsButton.target = self
+        openLoginItemsButton.action = #selector(openLoginItems)
+        openLoginItemsButton.bezelStyle = .rounded
+        openLoginItemsButton.translatesAutoresizingMaskIntoConstraints = false
+        root.addSubview(openLoginItemsButton)
+
         NSLayoutConstraint.activate([
             recorder.widthAnchor.constraint(equalToConstant: 180),
             recorder.heightAnchor.constraint(equalToConstant: 28),
@@ -188,9 +212,61 @@ final class PreferencesViewController: NSViewController {
             statusLabel.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
             statusLabel.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
             statusLabel.topAnchor.constraint(equalTo: hint.bottomAnchor, constant: 10),
-            statusLabel.bottomAnchor.constraint(lessThanOrEqualTo: root.bottomAnchor, constant: -16)
+            separator.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
+            separator.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
+            separator.topAnchor.constraint(equalTo: statusLabel.bottomAnchor, constant: 12),
+            launchCheckbox.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
+            launchCheckbox.trailingAnchor.constraint(lessThanOrEqualTo: root.trailingAnchor, constant: -20),
+            launchCheckbox.topAnchor.constraint(equalTo: separator.bottomAnchor, constant: 16),
+            launchHint.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 38),
+            launchHint.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
+            launchHint.topAnchor.constraint(equalTo: launchCheckbox.bottomAnchor, constant: 6),
+            openLoginItemsButton.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 34),
+            openLoginItemsButton.topAnchor.constraint(equalTo: launchHint.bottomAnchor, constant: 8),
+            openLoginItemsButton.bottomAnchor.constraint(lessThanOrEqualTo: root.bottomAnchor, constant: -16)
         ])
         view = root
+        refreshLaunchAtLogin()
+    }
+
+    override func viewWillAppear() {
+        super.viewWillAppear()
+        // The user may have changed it in System Settings meanwhile.
+        refreshLaunchAtLogin()
+    }
+
+    func refreshLaunchAtLogin(error: String? = nil) {
+        let state = LaunchAtLogin.state
+        launchCheckbox.state = state == .enabled || state == .requiresApproval ? .on : .off
+        launchCheckbox.isEnabled = state != .unsupported
+        openLoginItemsButton.isHidden = state == .unsupported
+
+        var hint: String
+        switch state {
+        case .unsupported:
+            hint = "开机自启动需要 macOS 13 或更高版本。"
+        case .requiresApproval:
+            hint = "还需要在“系统设置 → 通用 → 登录项”中允许 Deskbit。"
+        case .enabled, .disabled:
+            hint = "也可以在“系统设置 → 通用 → 登录项”中管理。"
+        }
+        if state != .unsupported, !LaunchAtLogin.isInApplicationsFolder {
+            hint += "建议先把 Deskbit 拖到“应用程序”文件夹再开启，否则移动或重新构建后自启动可能失效。"
+        }
+        if let error {
+            hint = "设置失败：\(error)"
+        }
+        launchHint.stringValue = hint
+        launchHint.textColor = error == nil && state != .requiresApproval ? .secondaryLabelColor : .systemOrange
+    }
+
+    @objc private func toggleLaunchAtLogin() {
+        let error = LaunchAtLogin.setEnabled(launchCheckbox.state == .on)
+        refreshLaunchAtLogin(error: error)
+    }
+
+    @objc private func openLoginItems() {
+        LaunchAtLogin.openSystemSettings()
     }
 
     override func viewWillDisappear() {
@@ -201,6 +277,7 @@ final class PreferencesViewController: NSViewController {
     func update(shortcut: HotKeyShortcut?) {
         recorder.shortcut = shortcut
         statusLabel.stringValue = ""
+        refreshLaunchAtLogin()
     }
 
     @objc private func resetToDefault() {

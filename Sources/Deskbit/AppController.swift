@@ -101,11 +101,15 @@ final class AppController: NSObject, NSApplicationDelegate, UNUserNotificationCe
     }
 
     private func configureStatusItem() {
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         statusItem.isVisible = true
-        statusItem.button?.image = NSImage(systemSymbolName: "note.text", accessibilityDescription: "Deskbit")
-        statusItem.button?.imagePosition = .imageLeading
-        statusItem.button?.title = "便签"
+        // Match the visual weight of the system's menu bar icons.
+        let symbol = NSImage(systemSymbolName: "note.text", accessibilityDescription: "Deskbit")?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 16, weight: .regular))
+        symbol?.isTemplate = true
+        statusItem.button?.image = symbol
+        statusItem.button?.imagePosition = .imageOnly
+        statusItem.button?.title = ""
         statusItem.button?.toolTip = "Deskbit"
         statusItem.menu = DeskbitStatusMenu.make(target: self, hiddenMenu: hiddenMenu)
     }
@@ -220,7 +224,7 @@ final class AppController: NSObject, NSApplicationDelegate, UNUserNotificationCe
                 }
             )
             let panel = NSPanel(
-                contentRect: NSRect(x: 0, y: 0, width: 440, height: 170),
+                contentRect: NSRect(x: 0, y: 0, width: 440, height: 290),
                 styleMask: [.titled, .closable],
                 backing: .buffered,
                 defer: false
@@ -450,10 +454,15 @@ final class AppController: NSObject, NSApplicationDelegate, UNUserNotificationCe
         selectionOverlay = nil
     }
 
+    /// Gathers every note onto the current desktop, including notes left on
+    /// other desktops (Spaces) or on a display that is no longer connected.
     @objc func showAllNotes() {
+        NSApp.activate(ignoringOtherApps: true)
         for note in NoteStore.shared.activeNotes {
-            show(noteID: note.id)
+            if controllers[note.id] == nil { open(note) }
+            controllers[note.id]?.gatherToCurrentDesktop()
         }
+        refreshMenu()
     }
 
     @objc private func showHiddenNote(_ sender: NSMenuItem) {

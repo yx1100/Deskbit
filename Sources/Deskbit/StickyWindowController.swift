@@ -64,6 +64,28 @@ final class StickyWindowController: NSWindowController, NSWindowDelegate, NSText
         window?.makeFirstResponder(rootView.textView)
     }
 
+    /// Brings the note onto the current desktop (Space) and back on screen.
+    func gatherToCurrentDesktop() {
+        guard let window else { return }
+        note.isHidden = false
+        if !NSScreen.screens.contains(where: { $0.visibleFrame.intersects(window.frame) }),
+           let visible = (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame {
+            let size = window.frame.size
+            window.setFrameOrigin(NSPoint(x: visible.midX - size.width / 2, y: visible.midY - size.height / 2))
+        }
+        if note.isPinned {
+            // Pinned notes already appear on every desktop.
+            window.makeKeyAndOrderFront(nil)
+        } else {
+            let behavior = window.collectionBehavior
+            window.collectionBehavior = behavior.union(.moveToActiveSpace)
+            window.makeKeyAndOrderFront(nil)
+            DispatchQueue.main.async { [weak window] in window?.collectionBehavior = behavior }
+        }
+        note.frame = WindowFrame(window.frame)
+        NoteStore.shared.update(note)
+    }
+
     func windowDidMove(_ notification: Notification) {
         guard let frame = window?.frame else { return }
         if appController?.shouldDeferFramePersistence(for: note.id) != true {

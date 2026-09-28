@@ -27,7 +27,9 @@ enum DeskbitStatusMenu {
             symbol: "clock.arrow.circlepath",
             target: target
         ))
-        menu.addItem(item("显示所有便签", action: #selector(DeskbitStatusMenuTarget.showAllNotes), key: "0", target: target))
+        let showAll = item("显示所有便签", action: #selector(DeskbitStatusMenuTarget.showAllNotes), key: "0", target: target)
+        showAll.toolTip = "把所有便签移到当前桌面并放到最前面"
+        menu.addItem(showAll)
         hiddenMenu.target = target
         menu.addItem(hiddenMenu)
         menu.addItem(.separator())
