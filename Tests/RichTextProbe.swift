@@ -55,7 +55,9 @@ struct RichTextProbe {
         RichTextFormatting.toggleTodo(in: todoEditor)
         let todoPending = todoEditor.string == "☐ 第一项\n☐ 第二项"
             && RichTextFormatting.todoState(in: todoEditor) == .pending
-        RichTextFormatting.toggleTodo(in: todoEditor)
+        // Checking happens by clicking the circle, not with the to-do button.
+        RichTextFormatting.toggleTodoCompletion(atParagraphStart: 0, in: todoEditor)
+        RichTextFormatting.toggleTodoCompletion(atParagraphStart: 6, in: todoEditor)
         let firstTaskTextRange = NSRange(location: 2, length: 3)
         let firstTaskStrike = (todoEditor.textStorage?.attribute(.strikethroughStyle, at: firstTaskTextRange.location, effectiveRange: nil) as? NSNumber)?.intValue
         let todoCompleted = todoEditor.string == "☑ 第一项\n☑ 第二项"
@@ -67,6 +69,7 @@ struct RichTextProbe {
             .flatMap(RichTextCodec.decode)
         let todoSurvived = completedRoundTrip?.string == todoEditor.string
             && (completedRoundTrip?.attribute(.strikethroughStyle, at: firstTaskTextRange.location, effectiveRange: nil) as? NSNumber)?.intValue == NSUnderlineStyle.single.rawValue
+        // The button removes to-dos whether or not they are checked.
         RichTextFormatting.toggleTodo(in: todoEditor)
         let todoRemoved = todoEditor.string == "第一项\n第二项"
             && RichTextFormatting.todoState(in: todoEditor) == .plain
@@ -213,7 +216,28 @@ struct RichTextProbe {
             && repairEditor.string == "☐ 123\n☑ "
             && !RichTextFormatting.normalizeTodoMarkers(in: repairEditor)
 
-        let checkboxClicks = firstChecked && secondUnchecked && plainIgnored
+        // The to-do button toggles between to-do and plain, never checking the item.
+        let buttonEditor = NSTextView()
+        buttonEditor.isRichText = true
+        buttonEditor.string = "任务"
+        buttonEditor.setSelectedRange(NSRange(location: 0, length: 0))
+        RichTextFormatting.toggleTodo(in: buttonEditor)
+        let buttonAdds = buttonEditor.string == "☐ 任务"
+        RichTextFormatting.toggleTodo(in: buttonEditor)
+        let buttonRemoves = buttonEditor.string == "任务"
+
+        // In an empty note the marker keeps the note's font instead of AppKit's default.
+        let noteFont = NSFont.systemFont(ofSize: 18)
+        for toggle in [RichTextFormatting.toggleTodo(in:), RichTextFormatting.toggleBulletList(in:)] {
+            let emptyEditor = NSTextView()
+            emptyEditor.isRichText = true
+            emptyEditor.typingAttributes = [.font: noteFont]
+            toggle(emptyEditor)
+            guard (emptyEditor.textStorage?.attribute(.font, at: 0, effectiveRange: nil) as? NSFont)?.pointSize == 18,
+                  (emptyEditor.typingAttributes[.font] as? NSFont)?.pointSize == 18 else { exit(3) }
+        }
+
+        let checkboxClicks = firstChecked && secondUnchecked && plainIgnored && buttonAdds && buttonRemoves
             && todoBackspace && bulletBackspace && ordinaryBackspace && repaired
 
         let extendedMarkdown = strikeMarkdown && headingMarkdown && italicMarkdown && arithmeticUntouched

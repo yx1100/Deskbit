@@ -40,32 +40,31 @@ enum RichTextFormatting {
         }
     }
 
+    /// The to-do button: turns lines into to-do items, or back into plain lines when
+    /// every selected line already is one. Checking an item is done by clicking its circle.
     static func toggleTodo(in textView: NSTextView) {
         guard let storage = textView.textStorage else { return }
         let selected = textView.selectedRange()
         let starts = paragraphStarts(in: storage.string, selection: selected)
+        let allTodos = !starts.isEmpty && starts.allSatisfy { todoState(in: storage.string, at: $0) != .plain }
         var newLocation = selected.location
         var newLength = selected.length
 
         storage.beginEditing()
         for start in starts.reversed() {
-            switch todoState(in: storage.string, at: start) {
-            case .plain:
+            if allTodos {
+                storage.replaceCharacters(in: NSRange(location: start, length: 2), with: "")
+                adjustSelection(location: &newLocation, length: &newLength, changeAt: start, delta: -2)
+                applyTodoCompletion(false, storage: storage, paragraphStart: min(start, storage.length))
+            } else if todoState(in: storage.string, at: start) == .plain {
                 if hasBullet(in: storage.string, at: start) {
                     storage.replaceCharacters(in: NSRange(location: start, length: 1), with: pendingTodoMarker)
                     applyListIndent(false, storage: storage, location: start)
                 } else {
-                    storage.replaceCharacters(in: NSRange(location: start, length: 0), with: "\(pendingTodoMarker) ")
+                    insertMarker("\(pendingTodoMarker) ", at: start, storage: storage, textView: textView)
                     adjustSelection(location: &newLocation, length: &newLength, changeAt: start, delta: 2)
                 }
                 applyTodoCompletion(false, storage: storage, paragraphStart: start)
-            case .pending:
-                storage.replaceCharacters(in: NSRange(location: start, length: 1), with: completedTodoMarker)
-                applyTodoCompletion(true, storage: storage, paragraphStart: start)
-            case .completed:
-                storage.replaceCharacters(in: NSRange(location: start, length: 2), with: "")
-                adjustSelection(location: &newLocation, length: &newLength, changeAt: start, delta: -2)
-                applyTodoCompletion(false, storage: storage, paragraphStart: min(start, storage.length))
             }
         }
         storage.endEditing()
@@ -76,7 +75,24 @@ enum RichTextFormatting {
         )
         textView.setSelectedRange(selection)
         setTypingListIndent(false, textView: textView)
-        setTypingTodoCompletion(todoState(in: textView) == .completed, textView: textView)
+        setTypingTodoCompletion(false, textView: textView)
+    }
+
+    /// Inserts a list or to-do marker with the line's own font. A plain string inserted
+    /// into an empty note would get AppKit's small default font, and later typing inherits it.
+    private static func insertMarker(_ marker: String, at location: Int, storage: NSTextStorage, textView: NSTextView) {
+        var attributes = storage.length > 0
+            ? storage.attributes(at: min(location, storage.length - 1), effectiveRange: nil)
+            : textView.typingAttributes
+        if storage.length > 0, (storage.string as NSString).character(at: min(location, storage.length - 1)) == 0x0A {
+            // An empty line only holds its newline; what the user is about to type matters more.
+            attributes = textView.typingAttributes
+        }
+        attributes.removeValue(forKey: .strikethroughStyle)
+        attributes.removeValue(forKey: .link)
+        attributes.removeValue(forKey: .attachment)
+        if attributes[.font] == nil { attributes[.font] = NoteAppearance.bodyFont() }
+        storage.replaceCharacters(in: NSRange(location: location, length: 0), with: NSAttributedString(string: marker, attributes: attributes))
     }
 
     /// Checks or unchecks the to-do item whose marker is at `start`; used by clicks on the checkbox.
@@ -117,7 +133,7 @@ enum RichTextFormatting {
                 applyListIndent(false, storage: storage, location: min(start, storage.length))
             } else if !allBulleted, !hasBullet(in: storage.string, at: start) {
                 if todoState(in: storage.string, at: start) == .plain {
-                    storage.replaceCharacters(in: NSRange(location: start, length: 0), with: "• ")
+                    insertMarker("• ", at: start, storage: storage, textView: textView)
                     adjustSelection(location: &newLocation, length: &newLength, changeAt: start, delta: 2)
                 } else {
                     storage.replaceCharacters(in: NSRange(location: start, length: 1), with: "•")
@@ -273,7 +289,7 @@ enum RichTextFormatting {
         } ?? false
     }
 
-    private static let headingSizes: [CGFloat] = [34, 30, 27]
+    private static let headingSizes: [CGFloat] = [26, 22, 20]
     private static let codeBackground = NSColor.black.withAlphaComponent(0.07)
 
     static func headingFont(level: Int) -> NSFont {
