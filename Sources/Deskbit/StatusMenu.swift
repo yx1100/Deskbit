@@ -12,9 +12,15 @@ import AppKit
 
 @MainActor
 enum DeskbitStatusMenu {
-    static func make(target: DeskbitStatusMenuTarget, hiddenMenu: NSMenuItem) -> NSMenu {
+    static func make(target: DeskbitStatusMenuTarget) -> NSMenu {
         let menu = NSMenu()
-        menu.addItem(item("新建便签", action: #selector(DeskbitStatusMenuTarget.newNoteFromMenu), key: "n", target: target))
+        menu.addItem(item(
+            "新建便签",
+            action: #selector(DeskbitStatusMenuTarget.newNoteFromMenu),
+            key: "n",
+            symbol: "square.and.pencil",
+            target: target
+        ))
         menu.addItem(item(
             "自动排序便签",
             action: #selector(DeskbitStatusMenuTarget.arrangeNotes),
@@ -27,11 +33,15 @@ enum DeskbitStatusMenu {
             symbol: "clock.arrow.circlepath",
             target: target
         ))
-        let showAll = item("显示所有便签", action: #selector(DeskbitStatusMenuTarget.showAllNotes), key: "0", target: target)
+        let showAll = item(
+            "显示所有便签",
+            action: #selector(DeskbitStatusMenuTarget.showAllNotes),
+            key: "0",
+            symbol: "macwindow.on.rectangle",
+            target: target
+        )
         showAll.toolTip = "把所有便签移到当前桌面并放到最前面"
         menu.addItem(showAll)
-        hiddenMenu.target = target
-        menu.addItem(hiddenMenu)
         menu.addItem(.separator())
         menu.addItem(item(
             "偏好设置…",

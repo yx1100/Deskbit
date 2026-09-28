@@ -16,8 +16,7 @@ struct StatusMenuProbe {
     static func main() {
         _ = NSApplication.shared
         let target = MenuTarget()
-        let hidden = NSMenuItem(title: "显示隐藏的便签", action: nil, keyEquivalent: "")
-        let menu = DeskbitStatusMenu.make(target: target, hiddenMenu: hidden)
+        let menu = DeskbitStatusMenu.make(target: target)
         let titles = menu.items.filter { !$0.isSeparatorItem }.map(\.title)
 
         guard titles == [
@@ -25,11 +24,13 @@ struct StatusMenuProbe {
             "自动排序便签",
             "历史便签",
             "显示所有便签",
-            "显示隐藏的便签",
             "偏好设置…",
             "退出 Deskbit"
         ],
         !titles.contains("编辑"),
+        menu.items
+            .filter({ !$0.isSeparatorItem && $0.title != "退出 Deskbit" })
+            .allSatisfy({ $0.image != nil }),
         menu.items.first(where: { $0.title == "偏好设置…" })?.action == #selector(MenuTarget.showPreferencesFromMenu),
         menu.items.first(where: { $0.title == "偏好设置…" })?.image != nil else { exit(1) }
 
