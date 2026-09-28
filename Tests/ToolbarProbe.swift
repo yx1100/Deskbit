@@ -12,7 +12,7 @@ struct ToolbarProbe {
 
         let buttons = descendants(of: toolbar).compactMap { $0 as? NSButton }
         let labels = buttons.compactMap { $0.accessibilityLabel() }
-        let expected = ["自动排序便签", "红色", "绿色", "蓝色", "黄色", "新建便签", "置顶", "完成"]
+        let expected = ["自动排序便签", "蓝色", "绿色", "黄色", "粉色", "新建便签", "置顶", "完成"]
         guard labels == expected else { exit(2) }
         guard descendants(of: toolbar).filter({ $0 is GlassCapsuleView }).count == 3 else { exit(1) }
 
@@ -30,10 +30,10 @@ struct ToolbarProbe {
         guard delegate.arrangeCount == 1 else { exit(6) }
         guard !labels.contains("历史便签") else { exit(12) }
 
-        toolbar.update(color: .red, isPinned: true)
+        toolbar.update(color: .pink, isPinned: true)
         guard let pin = buttons.first(where: { $0.accessibilityLabel() == "取消置顶" }) as? NoteToolButton,
               pin.isActive,
-              colorButtons.first(where: { $0.selectedColor })?.noteColor == .red else { exit(14) }
+              colorButtons.first(where: { $0.selectedColor })?.noteColor == .pink else { exit(14) }
 
         // Empty space between the capsules is the drag handle.
         toolbar.frame = NSRect(x: 0, y: 0, width: 300, height: NoteAppearance.topBarHeight)

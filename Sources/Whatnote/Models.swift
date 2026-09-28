@@ -1,39 +1,38 @@
 import AppKit
 
-/// Note colors. Raw values match earlier versions so saved notes keep their color:
-/// the former pink notes become red and the former mint notes become green.
+/// Note colors. Raw values match earlier versions so saved notes keep their color.
 enum NoteColor: String, Codable, CaseIterable {
-    case red = "pink"
-    case green = "mint"
     case blue
+    case mint
     case yellow
+    case pink
 
     /// The note paper, also the fill of the color dot.
     var background: NSColor {
         switch self {
-        case .red: return Self.srgb(0xFF8077)
-        case .green: return Self.srgb(0x8AE63E)
-        case .blue: return Self.srgb(0x78B7FF)
-        case .yellow: return Self.srgb(0xF1D546)
+        case .blue: return Self.srgb(0x2A83A2)
+        case .mint: return Self.srgb(0x72C6B9)
+        case .yellow: return Self.srgb(0xDCE49B)
+        case .pink: return Self.srgb(0xFCCCC6)
         }
     }
 
     /// Deeper shade for the dot's ring, checked to-do circles and active buttons.
     var accent: NSColor {
         switch self {
-        case .red: return Self.srgb(0xB74A42)
-        case .green: return Self.srgb(0x52A210)
-        case .blue: return Self.srgb(0x4379B7)
-        case .yellow: return Self.srgb(0xAB9318)
+        case .blue: return Self.srgb(0x1B5A70)
+        case .mint: return Self.srgb(0x3E8F83)
+        case .yellow: return Self.srgb(0x9AA24E)
+        case .pink: return Self.srgb(0xD2877E)
         }
     }
 
     var title: String {
         switch self {
-        case .red: return "红色"
-        case .green: return "绿色"
         case .blue: return "蓝色"
+        case .mint: return "绿色"
         case .yellow: return "黄色"
+        case .pink: return "粉色"
         }
     }
 

@@ -227,7 +227,7 @@ enum RichTextFormatting {
         } ?? false
     }
 
-    private static let headingSizes: [CGFloat] = [20, 17, 15]
+    private static let headingSizes: [CGFloat] = [24, 20, 18]
     private static let codeBackground = NSColor.black.withAlphaComponent(0.07)
 
     static func headingFont(level: Int) -> NSFont {

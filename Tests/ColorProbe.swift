@@ -7,10 +7,10 @@ struct ColorProbe {
             [CGFloat((hex >> 16) & 0xFF) / 255, CGFloat((hex >> 8) & 0xFF) / 255, CGFloat(hex & 0xFF) / 255]
         }
         let expected: [(NoteColor, String, String, [CGFloat], [CGFloat])] = [
-            (.red, "pink", "红色", rgb(0xFF8077), rgb(0xB74A42)),
-            (.green, "mint", "绿色", rgb(0x8AE63E), rgb(0x52A210)),
-            (.blue, "blue", "蓝色", rgb(0x78B7FF), rgb(0x4379B7)),
-            (.yellow, "yellow", "黄色", rgb(0xF1D546), rgb(0xAB9318))
+            (.blue, "blue", "蓝色", rgb(0x2A83A2), rgb(0x1B5A70)),
+            (.mint, "mint", "绿色", rgb(0x72C6B9), rgb(0x3E8F83)),
+            (.yellow, "yellow", "黄色", rgb(0xDCE49B), rgb(0x9AA24E)),
+            (.pink, "pink", "粉色", rgb(0xFCCCC6), rgb(0xD2877E))
         ]
 
         guard NoteColor.allCases == expected.map(\.0) else { exit(1) }
@@ -27,7 +27,7 @@ struct ColorProbe {
 
         // Notes saved by earlier versions keep their color.
         let legacy = Data(#"["yellow","blue","mint","pink"]"#.utf8)
-        guard (try? JSONDecoder().decode([NoteColor].self, from: legacy)) == [.yellow, .blue, .green, .red] else { exit(4) }
+        guard (try? JSONDecoder().decode([NoteColor].self, from: legacy)) == [.yellow, .blue, .mint, .pink] else { exit(4) }
 
         print("note colors: pass")
     }
