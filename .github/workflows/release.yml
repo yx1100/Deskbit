@@ -53,8 +53,7 @@ jobs:
           ./scripts/build-app.sh release
           for test_script in scripts/test-*.sh; do "$test_script"; done
           swift build
-          lipo -info dist/Deskbit.app/Contents/MacOS/Deskbit | grep -q arm64
-          lipo -info dist/Deskbit.app/Contents/MacOS/Deskbit | grep -q x86_64
+          lipo -archs dist/Deskbit.app/Contents/MacOS/Deskbit | grep -qx arm64
           codesign --verify --deep --strict dist/Deskbit.app
 
       - name: Package release artifacts
@@ -64,13 +63,13 @@ jobs:
           ./scripts/make-dmg.sh "$VERSION"
           ditto -c -k --sequesterRsrc --keepParent \
             dist/Deskbit.app \
-            "dist/Deskbit-v${VERSION}-macOS-universal.zip"
+            "dist/Deskbit-v${VERSION}-macOS-arm64.zip"
 
       - name: Update Homebrew Cask
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          ZIP="dist/Deskbit-v${VERSION}-macOS-universal.zip"
+          ZIP="dist/Deskbit-v${VERSION}-macOS-arm64.zip"
           SHA="$(shasum -a 256 "$ZIP" | awk '{print $1}')"
           sed -i '' -E \
             -e "s/^  version \"[^\"]+\"/  version \"${VERSION}\"/" \
@@ -85,8 +84,8 @@ jobs:
           TAG: ${{ steps.version.outputs.tag }}
         run: |
           ASSETS=(
-            "dist/Deskbit-v${VERSION}-macOS-universal.dmg"
-            "dist/Deskbit-v${VERSION}-macOS-universal.zip"
+            "dist/Deskbit-v${VERSION}-macOS-arm64.dmg"
+            "dist/Deskbit-v${VERSION}-macOS-arm64.zip"
           )
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "${ASSETS[@]}" --clobber

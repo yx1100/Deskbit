@@ -3,58 +3,35 @@ import AppKit
 @main
 struct FirstLaunchGuideProbe {
     static func main() {
-        let language = CommandLine.arguments.dropFirst().first
         let guide = FirstLaunchGuide.text
         let attributedGuide = FirstLaunchGuide.attributedText
 
-        switch language {
-        case "en":
-            precondition(guide == """
-            Welcome to Deskbit 👋
+        precondition(guide == """
+        欢迎使用 Deskbit 👋
 
-            Shortcuts
-            ⌘N New Note
-            ⌘B  Bold
-            Tab / Shift+Tab  Change bullet level
+        快捷键
+        ⌃⌥⌘空格  在任何地方新建便签（可在偏好设置中修改）
+        ⌘B  加粗
+        ⌘K  插入链接
+        Tab / Shift+Tab  调整项目符号层级
 
-            Arrange Notes
-            Click the top-left button to neatly arrange multiple notes.
+        Markdown
+        行首输入 # 空格变成标题，- 空格变成列表，- [ ] 空格变成待办；链接、粗体、斜体、删除线、行内代码也能用 Markdown 语法输入
 
-            View Note History
-            Click ✓ to complete a note, then choose Note History from the menu bar Deskbit icon. You can restore or permanently delete completed notes.
+        图片
+        直接粘贴或拖入图片，也可以点击底部的图片按钮插入
 
-            Report a Problem
-            Choose Send Feedback from the menu bar Deskbit icon, enter the details, and send.
-            """)
-            verifyBold(in: attributedGuide, expected: ["Shortcuts", "Arrange Notes", "View Note History", "Report a Problem"])
-            verifyRegular(in: attributedGuide, expected: ["Welcome to", "Deskbit", "⌘N", "New Note", "Bold", "Change bullet level"])
-        case "zh-Hans":
-            precondition(guide == """
-            欢迎使用 Deskbit 👋
+        自动排列
+        点击左上角按钮，自动将多个便签排列整齐
 
-            快捷键
-            ⌘N 新建便签
-            ⌘B  加粗
-            Tab / Shift+Tab  调整项目符号层级
-
-            自动排列
-            点击左上角按钮，自动将多个便签排列整齐
-
-            查看历史便签
-            点击 ✓ 完成便签，再点击菜单栏 Deskbit 图标 → 历史便签；可恢复或永久删除已完成的便签。
-
-            反馈问题
-            点击菜单栏 Deskbit 图标 → 用户反馈，填写内容后发送。
-            """)
-            verifyBold(in: attributedGuide, expected: ["快捷键", "自动排列", "查看历史便签", "反馈问题"])
-            verifyRegular(in: attributedGuide, expected: ["欢迎使用", "Deskbit", "⌘N", "新建便签", "加粗", "调整项目符号层级"])
-        default:
-            preconditionFailure("Expected en or zh-Hans")
-        }
-
+        查看历史便签
+        点击 ✓ 完成便签，再点击菜单栏 Deskbit 图标 → 历史便签；可恢复或永久删除已完成的便签。
+        """)
+        verifyBold(in: attributedGuide, expected: ["快捷键", "Markdown", "图片", "自动排列", "查看历史便签"])
+        verifyRegular(in: attributedGuide, expected: ["欢迎使用", "Deskbit", "⌃⌥⌘空格", "加粗", "插入链接", "调整项目符号层级"])
         precondition(!guide.contains("**"))
         precondition(attributedGuide.string == guide)
-        print("first-launch guide (\(language!)): pass")
+        print("first-launch guide: pass")
     }
 
     private static func verifyBold(in guide: NSAttributedString, expected strings: [String]) {

@@ -29,6 +29,7 @@ final class StickyWindowController: NSWindowController, NSWindowDelegate, NSText
         rootView.textView.onToggleBold = { [weak self] in self?.didTapBold() }
         rootView.textView.onToggleBulletList = { [weak self] in self?.didTapBulletList() }
         rootView.textView.onToggleTodo = { [weak self] in self?.didTapTodo() }
+        rootView.textView.onEditLink = { [weak self] in self?.didTapLink() }
         rootView.textView.onStructuredNewline = { [weak self] in
             guard let self else { return false }
             return RichTextFormatting.handleStructuredNewline(in: self.rootView.textView)
@@ -125,6 +126,18 @@ final class StickyWindowController: NSWindowController, NSWindowDelegate, NSText
         window?.makeFirstResponder(textView)
     }
 
+    func didTapLink() {
+        let textView = rootView.textView
+        window?.makeFirstResponder(textView)
+        NoteLinks.editLink(in: textView)
+    }
+
+    func didTapImage() {
+        let textView = rootView.textView
+        window?.makeFirstResponder(textView)
+        NoteImages.chooseImages(into: textView)
+    }
+
     func didTapNew() {
         guard let window else {
             appController?.createNote()
@@ -189,7 +202,7 @@ final class StickyWindowController: NSWindowController, NSWindowDelegate, NSText
             StickyWindowPresentation.apply(isPinned: note.isPinned, to: window)
         }
         rootView.toolbar.update(color: note.color, isPinned: note.isPinned)
-        rootView.statusLabel.stringValue = note.isPinned ? L10n.text("note.pinnedSaved") : L10n.text("note.saved")
+        rootView.statusLabel.stringValue = note.isPinned ? "已置顶 · 已保存" : "已保存"
         if isBecomingPinned {
             window?.orderFrontRegardless()
             if focusWhenPinned {
@@ -221,7 +234,7 @@ final class StickyWindowController: NSWindowController, NSWindowDelegate, NSText
         } else {
             StickyWindowPresentation.apply(isPinned: false, to: window)
             rootView.toolbar.update(color: note.color, isPinned: false)
-            rootView.statusLabel.stringValue = L10n.text("note.saved")
+            rootView.statusLabel.stringValue = "已保存"
         }
         move(to: frame)
         self.window?.orderBack(nil)
@@ -247,7 +260,7 @@ final class StickyWindowController: NSWindowController, NSWindowDelegate, NSText
             note.richTextData = RichTextCodec.encode(storage)
         }
         NoteStore.shared.update(note)
-        rootView.statusLabel.stringValue = L10n.text("note.saving")
+        rootView.statusLabel.stringValue = "正在保存…"
         saveStatusTimer?.invalidate()
         saveStatusTimer = Timer.scheduledTimer(
             timeInterval: 0.45,
@@ -267,19 +280,8 @@ final class StickyWindowController: NSWindowController, NSWindowDelegate, NSText
         )
     }
 
-    func refreshLocalization() {
-        rootView.toolbar.refreshLocalization(color: note.color, isPinned: note.isPinned)
-        rootView.footer.refreshLocalization()
-        rootView.textView.setAccessibilityLabel(L10n.text("note.content"))
-        if saveStatusTimer?.isValid == true {
-            rootView.statusLabel.stringValue = L10n.text("note.saving")
-        } else {
-            markSaved()
-        }
-    }
-
     @objc private func markSaved() {
-        rootView.statusLabel.stringValue = note.isPinned ? L10n.text("note.pinnedSaved") : L10n.text("note.saved")
+        rootView.statusLabel.stringValue = note.isPinned ? "已置顶 · 已保存" : "已保存"
     }
 
     private func saveFrame() {

@@ -8,6 +8,7 @@ trap 'rm -f "$probe_binary"' EXIT
 swiftc \
   "$project_dir/Sources/Deskbit/NoteAppearance.swift" \
   "$project_dir/Sources/Deskbit/RichTextCodec.swift" \
+  "$project_dir/Sources/Deskbit/NoteMedia.swift" \
   "$project_dir/Sources/Deskbit/RichTextFormatting.swift" \
   "$project_dir/Tests/RichTextProbe.swift" \
   -o "$probe_binary"

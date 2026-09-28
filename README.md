@@ -1,66 +1,49 @@
-# Deskbit
-
-[简体中文](README.md) · [English](README.en.md)
-
-[官网](https://deskbit.tonyjianchina.chatgpt.site) · [下载最新版本](https://github.com/tonyjianchina/Deskbit/releases/latest)
+# Deskbit（个人版）
 
 <p align="center">
   <img src="Assets/Deskbit-icon.png" width="128" alt="Deskbit app icon">
 </p>
 
-<p align="center">一款轻量、原生的 macOS 桌面便签应用。</p>
+<p align="center">一款轻量、原生的 macOS 桌面便签应用，仅支持 Apple Silicon。</p>
 
-Deskbit 用来随手记录任务、灵感和备忘。每张便签都是独立窗口，可以自由移动、置顶、批量选择和自动排列。便签内容只保存在本机，无需账号，也不会上传到服务器。
+本仓库 fork 自 [tonyjianchina/Deskbit](https://github.com/tonyjianchina/Deskbit)，在原版基础上改成个人专用版本：
 
-## 下载与安装
+- 只构建 Apple Silicon（arm64）版本，不再支持 Intel Mac
+- 支持 Markdown 语法、图片和链接
+- 全局快捷键一键新建便签（默认 `⌃⌥⌘空格`，可在偏好设置中修改）
+- 移除了用户反馈功能和多语言切换，界面固定为简体中文
 
-下载 [Deskbit-v1.2.2-macOS-universal.zip](https://github.com/tonyjianchina/Deskbit/releases/download/v1.2.2/Deskbit-v1.2.2-macOS-universal.zip)，或前往 [Releases](https://github.com/tonyjianchina/Deskbit/releases/latest) 查看最新版本。
+便签内容只保存在本机，无需账号，也不会上传到服务器。
 
-也可以通过 Homebrew 安装当前正式版本：
-
-```bash
-brew tap tonyjianchina/deskbit https://github.com/tonyjianchina/Deskbit
-brew install --cask deskbit
-```
-
-从下一个版本开始，GitHub Releases 会同时提供 ZIP 和可拖入“应用程序”的 DMG 安装包。
-
-1. 下载 DMG 后打开，将 `Deskbit.app` 拖入“应用程序”文件夹；或下载 ZIP，解压后拖入该文件夹。
-2. 在“应用程序”中打开 Deskbit。
-
-> [!IMPORTANT]
-> v1.2.2 已进行本地代码签名，但尚未经过 Apple Developer ID 签名和公证。首次打开可能被 macOS 拦截。请先尝试打开一次，再按系统版本放行：
-> - macOS 13 或更高版本：“系统设置 → 隐私与安全性”，在安全性区域点击“仍要打开”。
-> - macOS 11–12：“系统偏好设置 → 安全性与隐私 → 通用”，点击“仍要打开”。
->
-> 只应对从本仓库下载的安装包执行此操作。
-
-### 系统要求
+## 系统要求
 
 - macOS 11 Big Sur 或更高版本
-- Apple Silicon 或 Intel Mac
-
-## 界面语言
-
-从 v1.2.2 起，Deskbit 提供简体中文和英语两种翻译，暂不提供繁体中文翻译。首次启动默认按 macOS 的首选语言顺序，使用最先遇到的中文或英语；中文偏好（包括繁体中文）统一使用简体中文。其他语言会被跳过；如果列表中没有中文或英语，则使用英语。官网也使用相同的语言匹配规则。
-
-在 Deskbit 菜单栏菜单中选择“语言 → 跟随系统 / English / 简体中文”即可切换。手动选择会被记住，应用界面即时更新，无需重启。切换语言不会翻译或修改已有便签内容。
-
-v1.2.2 安装包已包含中英界面，无需从源码构建。
+- Apple Silicon Mac（M 系列芯片）
 
 ## 主要功能
 
 - 黄色、蓝色、绿色和粉色四种便签配色
-- 加粗、项目符号和三态待办事项，支持按钮和快捷键
+- Markdown：标题、粗体、斜体、删除线、行内代码、链接、列表、待办
+- 图片：粘贴、拖入或通过底栏按钮插入，自动缩小以适应便签
+- 链接：`⌘K` 插入或编辑链接，输入或粘贴的网址会自动识别，点击即可打开
+- 全局快捷键，在任何应用中一键新建便签
 - 多级项目符号，以 `•`、`∘`、`▪` 区分层级
 - 在 Finder 桌面框选多张便签后整组移动、置顶或取消置顶
 - 自动排列全部便签，或只排列当前框选的便签
 - 未置顶时使用普通窗口层级；置顶后可跨桌面空间显示
-- 菜单栏入口，可新建、显示、排列便签或退出应用
 - 历史便签面板，可恢复已完成内容或将其永久删除
-- 自动保存富文本、颜色、窗口位置和置顶状态
+- 自动保存富文本、图片、颜色、窗口位置和置顶状态
 
 ## 使用方法
+
+### 全局快捷键
+
+- 默认 `⌃⌥⌘空格`（Control + Option + Command + 空格）：在任何地方新建便签并直接开始输入。
+- 修改：点击菜单栏 Deskbit 图标 → 偏好设置…（`⌘,`），点击快捷键输入框后按下新的组合键。
+  - 组合键必须包含 `⌘`、`⌥` 或 `⌃` 中的至少一个
+  - `Esc` 取消录制，`Delete` 清除快捷键（即关闭全局快捷键）
+  - “恢复默认”回到 `⌃⌥⌘空格`
+- 基于系统热键接口实现，不需要授予“辅助功能”权限。
 
 ### 便签窗口
 
@@ -81,37 +64,45 @@ v1.2.2 安装包已包含中英界面，无需从源码构建。
 
 ### 编辑与快捷键
 
-支持选中文字后剪切、复制和粘贴：`⌘X`、`⌘C`、`⌘V`，`⌘A` 可全选。也可从 Deskbit 菜单栏中的“编辑”子菜单执行这些操作。
+支持选中文字后剪切、复制和粘贴：`⌘X`、`⌘C`、`⌘V`，`⌘A` 可全选。
 
 | 功能 | 按钮 | 快捷键 | Markdown |
 | --- | --- | --- | --- |
+| 标题 | — | — | 行首输入 `# `、`## `、`### ` |
 | 加粗 | 底栏 `B` | `⌘B` | `**文本**` |
+| 斜体 | — | — | `*文本*` |
+| 删除线 | — | — | `~~文本~~` |
+| 行内代码 | — | — | `` `代码` `` |
+| 链接 | 底栏链接图标 | `⌘K` | `[文字](https://example.com)` |
+| 图片 | 底栏图片图标 | `⌘V` 粘贴 | 也可从 Finder 或浏览器拖入 |
 | 项目符号 | 底栏列表图标 | `⌘⇧8` | 行首输入 `- ` 或 `* ` |
-| 待办事项 | 底栏待办图标 | `⌘⇧X` | 连续点击：`☐` → `☑` + 删除线 → 取消待办 |
+| 待办事项 | 底栏待办图标 | `⌘⇧X` | 行首输入 `- [ ] ` 或 `- [x] ` |
 | 增加项目层级 | — | `Tab` | — |
 | 减少项目层级 | — | `Shift+Tab` | — |
+
+Markdown 语法在输入或粘贴时自动转换为对应格式。在标题行末尾按回车会回到正文样式。拖入非图片文件时会插入指向该文件的链接。
 
 ## 数据与隐私
 
 - 数据保存在 `~/Library/Application Support/Deskbit/notes.json`。
-- 旧版数据会在首次启动新版本时自动迁移。
-- Deskbit 没有账号、云同步、广告或遥测上报。
-- 只有在你主动发送应用内反馈时，填写的反馈正文才会通过第三方服务 FormSubmit 发送给开发者；不会自动附带便签内容。请勿在反馈中填写密码、身份信息等敏感信息。
+- 含图片的便签以 RTFD 格式保存；图片插入时会缩小到最长边 1600 像素，以控制文件大小。
+- 快捷键设置保存在 `UserDefaults` 中。
+- Deskbit 没有账号、云同步、广告、遥测或任何网络请求。
 
 建议升级或更换电脑前备份上述 `notes.json` 文件。
 
 ## 从源码构建
 
-安装 Xcode Command Line Tools 后执行：
+在 Apple Silicon Mac 上安装 Xcode Command Line Tools 后执行：
 
 ```bash
-git clone https://github.com/tonyjianchina/Deskbit.git
+git clone https://github.com/yx1100/Deskbit.git
 cd Deskbit
 ./scripts/build-app.sh
 open "dist/Deskbit.app"
 ```
 
-构建脚本会生成同时支持 Apple Silicon 和 Intel Mac 的 `dist/Deskbit.app`。
+构建脚本生成仅包含 arm64 架构的 `dist/Deskbit.app`。
 
 如需生成 DMG 安装包：
 
@@ -141,12 +132,8 @@ Casks/             Homebrew Cask
 
 ## 发布维护
 
-发布工作流由 `vX.Y.Z` 标签或 GitHub Actions 手动触发。它会运行检查、构建 Universal App、生成 ZIP 和 DMG、创建 GitHub Release，并更新 Homebrew Cask。不需要额外配置 GitHub Actions Secrets。
-
-## 当前状态
-
-Deskbit 目前处于早期试用阶段。可以通过 GitHub Issues 反馈问题或提交功能建议。
+发布工作流由 `vX.Y.Z` 标签或 GitHub Actions 手动触发。它会运行检查、构建 arm64 App、生成 ZIP 和 DMG、创建 GitHub Release，并更新 Homebrew Cask。
 
 ## 许可证
 
-本项目使用 [MIT 许可证](LICENSE)。欢迎使用、修改和贡献；如果 Deskbit 对你有帮助，欢迎在 GitHub 点一个 Star。
+本项目使用 [MIT 许可证](LICENSE)，原作者为 tonyjianchina。

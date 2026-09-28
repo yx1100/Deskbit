@@ -49,7 +49,9 @@ struct ToolbarProbe {
         guard formattingButtons.compactMap({ $0.accessibilityLabel() }) == [
             "加粗（⌘B）",
             "项目符号（⌘⇧8；Tab / Shift+Tab 调整级别）",
-            "待办事项（⌘⇧X）"
+            "待办事项（⌘⇧X）",
+            "链接（⌘K）",
+            "插入图片（也可直接粘贴或拖入）"
         ] else { exit(13) }
         formattingButtons[2].performClick(nil)
         guard delegate.todoCount == 1 else { exit(14) }
@@ -69,6 +71,8 @@ private final class ToolbarDelegateProbe: StickyToolbarDelegate {
     func didTapBold() {}
     func didTapBulletList() {}
     func didTapTodo() { todoCount += 1 }
+    func didTapLink() {}
+    func didTapImage() {}
     func didTapNew() {}
     func didTapPin() {}
     func didTapComplete() {}

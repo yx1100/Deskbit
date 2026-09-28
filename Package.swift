@@ -3,7 +3,6 @@ import PackageDescription
 
 let package = Package(
     name: "Deskbit",
-    defaultLocalization: "en",
     platforms: [.macOS(.v11)],
     products: [
         .executable(name: "Deskbit", targets: ["Deskbit"])
@@ -11,8 +10,7 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "Deskbit",
-            path: "Sources/Deskbit",
-            resources: [.process("Resources")]
+            path: "Sources/Deskbit"
         )
     ]
 )

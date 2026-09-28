@@ -6,10 +6,9 @@ probe_binary="$(mktemp /tmp/deskbit-appearance.XXXXXX)"
 trap 'rm -f "$probe_binary"' EXIT
 
 swiftc \
-  "$project_dir/Sources/Deskbit/Localization.swift" \
   "$project_dir/Sources/Deskbit/NoteAppearance.swift" \
   "$project_dir/Sources/Deskbit/Models.swift" \
   "$project_dir/Tests/AppearanceProbe.swift" \
   -o "$probe_binary"
 
-"$probe_binary" -DeskbitLanguage zh-Hans
+"$probe_binary"

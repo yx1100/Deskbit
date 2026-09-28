@@ -27,7 +27,7 @@ if [ "$app_version" != "$version" ]; then
   exit 1
 fi
 
-output="$root/dist/Deskbit-v${version}-macOS-universal.dmg"
+output="$root/dist/Deskbit-v${version}-macOS-arm64.dmg"
 stage="$(mktemp -d)"
 trap 'rm -rf "$stage"' EXIT
 

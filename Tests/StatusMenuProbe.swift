@@ -6,8 +6,7 @@ private final class MenuTarget: NSObject, DeskbitStatusMenuTarget {
     @objc func arrangeNotes() {}
     @objc func showHistoryFromMenu() {}
     @objc func showAllNotes() {}
-    @objc func showFeedbackFromMenu() {}
-    @objc func changeLanguage(_ sender: NSMenuItem) {}
+    @objc func showPreferencesFromMenu() {}
     @objc func quit() {}
 }
 
@@ -27,13 +26,12 @@ struct StatusMenuProbe {
             "历史便签",
             "显示所有便签",
             "显示隐藏的便签",
-            "用户反馈",
-            "语言",
+            "偏好设置…",
             "退出 Deskbit"
         ],
         !titles.contains("编辑"),
-        menu.items.first(where: { $0.title == "用户反馈" })?.action == #selector(MenuTarget.showFeedbackFromMenu),
-        menu.items.first(where: { $0.title == "用户反馈" })?.image != nil else { exit(1) }
+        menu.items.first(where: { $0.title == "偏好设置…" })?.action == #selector(MenuTarget.showPreferencesFromMenu),
+        menu.items.first(where: { $0.title == "偏好设置…" })?.image != nil else { exit(1) }
 
         guard menu.items
             .filter({ !$0.isSeparatorItem && $0.submenu == nil && $0.action != nil })

@@ -8,6 +8,8 @@ protocol StickyToolbarDelegate: AnyObject {
     func didTapBold()
     func didTapBulletList()
     func didTapTodo()
+    func didTapLink()
+    func didTapImage()
     func didTapNew()
     func didTapPin()
     func didTapComplete()
@@ -83,7 +85,7 @@ final class StickyToolbarView: NSView {
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
 
-        stack.addArrangedSubview(iconButton("rectangle.3.group", tip: L10n.text("menu.arrange"), action: #selector(arrangeNotes)))
+        stack.addArrangedSubview(iconButton("rectangle.3.group", tip: "自动排序便签", action: #selector(arrangeNotes)))
 
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
@@ -98,10 +100,10 @@ final class StickyToolbarView: NSView {
             stack.addArrangedSubview(button)
         }
 
-        stack.addArrangedSubview(iconButton("plus", tip: L10n.text("menu.newNote"), action: #selector(newNote)))
-        pinButton = iconButton(isPinned ? "pin.fill" : "pin", tip: L10n.text("note.pin"), action: #selector(togglePin))
+        stack.addArrangedSubview(iconButton("plus", tip: "新建便签", action: #selector(newNote)))
+        pinButton = iconButton(isPinned ? "pin.fill" : "pin", tip: "置顶", action: #selector(togglePin))
         stack.addArrangedSubview(pinButton)
-        stack.addArrangedSubview(iconButton("checkmark", tip: L10n.text("note.complete"), action: #selector(completeNoteButton)))
+        stack.addArrangedSubview(iconButton("checkmark", tip: "完成", action: #selector(completeNoteButton)))
 
         NSLayoutConstraint.activate([
             heightAnchor.constraint(equalToConstant: 40),
@@ -144,31 +146,11 @@ final class StickyToolbarView: NSView {
 
     func update(color: NoteColor, isPinned: Bool) {
         colorButtons.forEach { $0.selectedColor = $0.noteColor == color }
-        let pinTitle = L10n.text(isPinned ? "note.unpin" : "note.pin")
+        let pinTitle = isPinned ? "取消置顶" : "置顶"
         pinButton.image = NSImage(systemSymbolName: isPinned ? "pin.fill" : "pin", accessibilityDescription: pinTitle)
         pinButton.toolTip = pinTitle
         pinButton.setAccessibilityLabel(pinTitle)
         pinButton.contentTintColor = isPinned ? NSColor.black.withAlphaComponent(0.82) : NSColor.black.withAlphaComponent(0.58)
-    }
-
-    func refreshLocalization(color: NoteColor, isPinned: Bool) {
-        for button in stack.arrangedSubviews.compactMap({ $0 as? NSButton }) {
-            let key: String
-            if let swatch = button as? ColorDotButton {
-                button.toolTip = swatch.noteColor.title
-                button.setAccessibilityLabel(swatch.noteColor.title)
-                continue
-            }
-            switch button.action {
-            case #selector(arrangeNotes): key = "menu.arrange"
-            case #selector(newNote): key = "menu.newNote"
-            case #selector(completeNoteButton): key = "note.complete"
-            default: continue
-            }
-            button.toolTip = L10n.text(key)
-            button.setAccessibilityLabel(L10n.text(key))
-        }
-        update(color: color, isPinned: isPinned)
     }
 
     @objc private func selectColor(_ sender: ColorDotButton) { delegate?.didChooseColor(sender.noteColor) }
@@ -180,24 +162,28 @@ final class StickyToolbarView: NSView {
 
 final class StickyFormattingFooterView: NSView {
     weak var delegate: StickyToolbarDelegate?
-    let statusLabel = NSTextField(labelWithString: L10n.text("note.saved"))
+    let statusLabel = NSTextField(labelWithString: "已保存")
     private let boldButton: NSButton
     private let bulletButton: NSButton
     private let todoButton: NSButton
+    private let linkButton: NSButton
+    private let imageButton: NSButton
 
     override init(frame frameRect: NSRect) {
-        boldButton = Self.makeButton(symbol: "bold", tip: L10n.text("format.bold"), action: #selector(toggleBold))
-        bulletButton = Self.makeButton(symbol: "list.bullet", tip: L10n.text("format.bullets"), action: #selector(toggleBullet))
+        boldButton = Self.makeButton(symbol: "bold", tip: "加粗（⌘B）", action: #selector(toggleBold))
+        bulletButton = Self.makeButton(symbol: "list.bullet", tip: "项目符号（⌘⇧8；Tab / Shift+Tab 调整级别）", action: #selector(toggleBullet))
         todoButton = Self.makeButton(
             symbol: "checklist",
             fallbackSymbol: "checkmark.circle",
-            tip: L10n.text("format.todo"),
+            tip: "待办事项（⌘⇧X）",
             action: #selector(toggleTodo)
         )
+        linkButton = Self.makeButton(symbol: "link", tip: "链接（⌘K）", action: #selector(editLink))
+        imageButton = Self.makeButton(symbol: "photo", tip: "插入图片（也可直接粘贴或拖入）", action: #selector(insertImage))
         super.init(frame: frameRect)
         translatesAutoresizingMaskIntoConstraints = false
 
-        let stack = NSStackView(views: [boldButton, bulletButton, todoButton])
+        let stack = NSStackView(views: [boldButton, bulletButton, todoButton, linkButton, imageButton])
         stack.orientation = .horizontal
         stack.alignment = .centerY
         stack.spacing = 2
@@ -207,6 +193,12 @@ final class StickyFormattingFooterView: NSView {
         boldButton.target = self
         bulletButton.target = self
         todoButton.target = self
+        linkButton.target = self
+        imageButton.target = self
+        linkButton.setButtonType(.momentaryChange)
+        imageButton.setButtonType(.momentaryChange)
+        linkButton.contentTintColor = NSColor.black.withAlphaComponent(0.50)
+        imageButton.contentTintColor = NSColor.black.withAlphaComponent(0.50)
         statusLabel.font = NSFont.systemFont(ofSize: 11, weight: .regular)
         statusLabel.textColor = NSColor.black.withAlphaComponent(0.42)
         statusLabel.alignment = .right
@@ -233,13 +225,6 @@ final class StickyFormattingFooterView: NSView {
         update(button: todoButton, active: isTodoItem)
     }
 
-    func refreshLocalization() {
-        for (button, key) in [(boldButton, "format.bold"), (bulletButton, "format.bullets"), (todoButton, "format.todo")] {
-            button.toolTip = L10n.text(key)
-            button.setAccessibilityLabel(L10n.text(key))
-        }
-    }
-
     private static func makeButton(symbol: String, fallbackSymbol: String? = nil, tip: String, action: Selector) -> NSButton {
         let image = NSImage(systemSymbolName: symbol, accessibilityDescription: tip)
             ?? fallbackSymbol.flatMap { NSImage(systemSymbolName: $0, accessibilityDescription: tip) }
@@ -263,6 +248,8 @@ final class StickyFormattingFooterView: NSView {
     @objc private func toggleBold() { delegate?.didTapBold() }
     @objc private func toggleBullet() { delegate?.didTapBulletList() }
     @objc private func toggleTodo() { delegate?.didTapTodo() }
+    @objc private func editLink() { delegate?.didTapLink() }
+    @objc private func insertImage() { delegate?.didTapImage() }
 }
 
 enum StickyEditingShortcut: Equatable {
@@ -284,6 +271,7 @@ final class StickyTextView: NSTextView {
     var onToggleBold: (() -> Void)?
     var onToggleBulletList: (() -> Void)?
     var onToggleTodo: (() -> Void)?
+    var onEditLink: (() -> Void)?
     var onStructuredNewline: (() -> Bool)?
     var onAdjustBulletLevel: ((Int) -> Bool)?
 
@@ -303,6 +291,10 @@ final class StickyTextView: NSTextView {
         }
         if modifiers == [.command, .shift], key == "x" {
             onToggleTodo?()
+            return true
+        }
+        if modifiers == [.command], key == "k" {
+            onEditLink?()
             return true
         }
         if let command = StickyEditingShortcut.command(for: modifiers, key: key) {
@@ -333,7 +325,59 @@ final class StickyTextView: NSTextView {
     }
 
     override func paste(_ sender: Any?) {
+        let pasteboard = NSPasteboard.general
+        let images = NoteImages.images(on: pasteboard)
+        if !images.isEmpty, NoteImages.insert(images, into: self) { return }
+        let start = selectedRange().location
         super.pasteAsPlainText(sender)
+        let end = selectedRange().location
+        NoteLinks.detectLinks(in: self, range: NSRange(location: start, length: max(0, end - start)))
+    }
+
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        let pasteboard = sender.draggingPasteboard
+        let fileURLs = pasteboard.readObjects(
+            forClasses: [NSURL.self],
+            options: [.urlReadingFileURLsOnly: true]
+        ) as? [URL] ?? []
+        let point = convert(sender.draggingLocation, from: nil)
+        let dropRange = NSRange(location: characterIndexForInsertion(at: point), length: 0)
+
+        if !fileURLs.isEmpty {
+            let imageURLs = NoteImages.imageFileURLs(on: pasteboard)
+            if !imageURLs.isEmpty {
+                return NoteImages.insert(imageURLs.compactMap(NSImage.init(contentsOf:)), into: self, replacing: dropRange)
+            }
+            // Other files become links so the note stays small.
+            return insertFileLinks(fileURLs, at: dropRange)
+        }
+
+        // Images dragged from a browser; rich text drags keep the default behavior.
+        let carriesRichText = pasteboard.availableType(from: [.rtf, .rtfd]) != nil
+        if !carriesRichText,
+           pasteboard.canReadObject(forClasses: [NSImage.self], options: nil),
+           let images = pasteboard.readObjects(forClasses: [NSImage.self], options: nil) as? [NSImage],
+           !images.isEmpty {
+            return NoteImages.insert(images, into: self, replacing: dropRange)
+        }
+        return super.performDragOperation(sender)
+    }
+
+    private func insertFileLinks(_ urls: [URL], at range: NSRange) -> Bool {
+        guard let storage = textStorage else { return false }
+        let insertion = NSMutableAttributedString()
+        for (index, url) in urls.enumerated() {
+            if index > 0 { insertion.append(NSAttributedString(string: " ", attributes: typingAttributes)) }
+            var attributes = typingAttributes
+            attributes[.link] = url
+            insertion.append(NSAttributedString(string: url.lastPathComponent, attributes: attributes))
+        }
+        let safeRange = NSRange(location: min(range.location, storage.length), length: 0)
+        guard shouldChangeText(in: safeRange, replacementString: insertion.string) else { return false }
+        storage.replaceCharacters(in: safeRange, with: insertion)
+        setSelectedRange(NSRange(location: safeRange.location + insertion.length, length: 0))
+        didChangeText()
+        return true
     }
 }
 
@@ -360,7 +404,11 @@ final class StickyRootView: NSView {
         scrollView.borderType = .noBorder
         scrollView.translatesAutoresizingMaskIntoConstraints = false
 
+        // Touching the layout manager keeps the editor on TextKit 1, which sizes image attachment cells reliably.
+        _ = textView.layoutManager
         textView.isRichText = true
+        textView.importsGraphics = true
+        textView.isAutomaticLinkDetectionEnabled = true
         textView.allowsUndo = true
         textView.font = NoteAppearance.bodyFont()
         textView.textColor = NSColor.black.withAlphaComponent(0.78)
@@ -369,9 +417,10 @@ final class StickyRootView: NSView {
         textView.textContainerInset = NSSize(width: 14, height: 12)
         textView.textContainer?.widthTracksTextView = true
         textView.autoresizingMask = [.width]
-        textView.setAccessibilityLabel(L10n.text("note.content"))
+        textView.setAccessibilityLabel("便签内容")
         if let restored = RichTextCodec.decode(note.richTextData) {
             textView.textStorage?.setAttributedString(restored)
+            if let storage = textView.textStorage { NoteImages.fitAttachments(in: storage) }
         } else {
             textView.string = note.text
         }

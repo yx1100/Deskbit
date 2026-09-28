@@ -139,13 +139,48 @@ struct RichTextProbe {
         let markdownBold = markdownFont.map { NSFontManager.shared.traits(of: $0).contains(.boldFontMask) } ?? false
         let markdownBullets = markdownEditor.string == "重点\n• 第一项\n• 第二项"
 
-        let removedStrikeMarkdownEditor = NSTextView()
-        removedStrikeMarkdownEditor.isRichText = true
-        removedStrikeMarkdownEditor.string = "~~不再转换~~"
-        removedStrikeMarkdownEditor.setSelectedRange(NSRange(location: removedStrikeMarkdownEditor.string.utf16.count, length: 0))
-        let strikeMarkdownRemoved = !RichTextFormatting.applyMarkdownSyntax(in: removedStrikeMarkdownEditor)
-            && removedStrikeMarkdownEditor.string == "~~不再转换~~"
-            && removedStrikeMarkdownEditor.textStorage?.attribute(.strikethroughStyle, at: 2, effectiveRange: nil) == nil
+        func convertedEditor(_ text: String) -> NSTextView {
+            let editor = NSTextView()
+            editor.isRichText = true
+            editor.font = NoteAppearance.bodyFont()
+            editor.typingAttributes = [.font: NoteAppearance.bodyFont()]
+            editor.string = text
+            editor.setSelectedRange(NSRange(location: editor.string.utf16.count, length: 0))
+            _ = RichTextFormatting.applyMarkdownSyntax(in: editor)
+            return editor
+        }
+        func fontAt(_ editor: NSTextView, _ location: Int) -> NSFont? {
+            editor.textStorage?.attribute(.font, at: location, effectiveRange: nil) as? NSFont
+        }
+
+        let strikeEditor = convertedEditor("~~删除~~")
+        let strikeMarkdown = strikeEditor.string == "删除"
+            && (strikeEditor.textStorage?.attribute(.strikethroughStyle, at: 0, effectiveRange: nil) as? Int) == NSUnderlineStyle.single.rawValue
+
+        let headingEditor = convertedEditor("## 标题")
+        let headingMarkdown = headingEditor.string == "标题"
+            && RichTextFormatting.headingLevel(of: fontAt(headingEditor, 0)) == 2
+            && RichTextFormatting.headingLevel(of: headingEditor.typingAttributes[.font] as? NSFont) == 2
+
+        let italicEditor = convertedEditor("一个*斜体*词")
+        let italicMarkdown = italicEditor.string == "一个斜体词"
+            && fontAt(italicEditor, 2).map { NSFontManager.shared.traits(of: $0).contains(.italicFontMask) } == true
+        let arithmeticUntouched = convertedEditor("2*3*4").string == "2*3*4"
+
+        let codeEditor = convertedEditor("运行 `swift build`")
+        let codeMarkdown = codeEditor.string == "运行 swift build"
+            && fontAt(codeEditor, 3)?.isFixedPitch == true
+
+        let linkEditor = convertedEditor("见 [官网](https://example.com)")
+        let linkMarkdown = linkEditor.string == "见 官网"
+            && (linkEditor.textStorage?.attribute(.link, at: 2, effectiveRange: nil) as? URL)?.absoluteString == "https://example.com"
+        let nonLinkUntouched = convertedEditor("[注释](不是网址)").string == "[注释](不是网址)"
+
+        let todoMarkdownEditor = convertedEditor("- [ ] 买牛奶\n- [x] 已完成")
+        let todoMarkdown = todoMarkdownEditor.string == "☐ 买牛奶\n☑ 已完成"
+
+        let extendedMarkdown = strikeMarkdown && headingMarkdown && italicMarkdown && arithmeticUntouched
+            && codeMarkdown && linkMarkdown && nonLinkUntouched && todoMarkdown
 
         let boldMarkdownEditor = NSTextView()
         boldMarkdownEditor.isRichText = true
@@ -236,7 +271,7 @@ struct RichTextProbe {
         orphanBulletEditor.setSelectedRange(NSRange(location: 2, length: 0))
         let orphanPrevented = !RichTextFormatting.adjustBulletLevel(in: orphanBulletEditor, delta: 1)
 
-        print("bold=\(boldSurvived) legacyStrike=\(strikeSurvived) todo=\(todoPending && todoCompleted && todoRemoved && todoSurvived && todoSelectionPreserved && completedTodoNewline && splitCompletedTodo) bullet=\(bulletSurvived) futureBold=\(futureBoldOn && futureBoldOff) bulletToggle=\(bulletsOn && bulletsOff && bulletSelectionPreserved && bulletBecameTodo && todoBecameBullet) markdown=\(markdownChanged && markdownBold && markdownBullets && strikeMarkdownRemoved && trailingIsRegular) listExit=\(listExitClean) nesting=\(multiLevelOn && multiLevelOff && multiLevelSurvived && orphanPrevented && tieredMarkers && inheritedMarker && normalizedLegacyMarker) markerProportions=\(markerProportionsAreBalanced) bytes=\(data.count)")
-        guard boldSurvived, bulletSurvived, strikeSurvived, futureBoldOn, futureBoldOff, todoPending, todoCompleted, todoRemoved, todoSurvived, todoSelectionPreserved, completedTodoNewline, splitCompletedTodo, bulletsOn, bulletsOff, bulletSelectionPreserved, bulletBecameTodo, todoBecameBullet, markdownChanged, markdownBold, markdownBullets, strikeMarkdownRemoved, trailingIsRegular, listExitClean, multiLevelOn, multiLevelOff, multiLevelSurvived, orphanPrevented, tieredMarkers, inheritedMarker, normalizedLegacyMarker, markerProportionsAreBalanced else { exit(1) }
+        print("bold=\(boldSurvived) legacyStrike=\(strikeSurvived) todo=\(todoPending && todoCompleted && todoRemoved && todoSurvived && todoSelectionPreserved && completedTodoNewline && splitCompletedTodo) bullet=\(bulletSurvived) futureBold=\(futureBoldOn && futureBoldOff) bulletToggle=\(bulletsOn && bulletsOff && bulletSelectionPreserved && bulletBecameTodo && todoBecameBullet) markdown=\(markdownChanged && markdownBold && markdownBullets && extendedMarkdown && trailingIsRegular) listExit=\(listExitClean) nesting=\(multiLevelOn && multiLevelOff && multiLevelSurvived && orphanPrevented && tieredMarkers && inheritedMarker && normalizedLegacyMarker) markerProportions=\(markerProportionsAreBalanced) bytes=\(data.count)")
+        guard boldSurvived, bulletSurvived, strikeSurvived, futureBoldOn, futureBoldOff, todoPending, todoCompleted, todoRemoved, todoSurvived, todoSelectionPreserved, completedTodoNewline, splitCompletedTodo, bulletsOn, bulletsOff, bulletSelectionPreserved, bulletBecameTodo, todoBecameBullet, markdownChanged, markdownBold, markdownBullets, extendedMarkdown, trailingIsRegular, listExitClean, multiLevelOn, multiLevelOff, multiLevelSurvived, orphanPrevented, tieredMarkers, inheritedMarker, normalizedLegacyMarker, markerProportionsAreBalanced else { exit(1) }
     }
 }

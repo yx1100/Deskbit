@@ -23,21 +23,10 @@ cd "$project_dir"
 rm -rf "$app_dir"
 mkdir -p "$contents_dir/MacOS" "$contents_dir/Resources"
 
-if [[ "$configuration" == "release" ]]; then
-  swift build -c release --arch arm64
-  arm_binary="$(swift build -c release --arch arm64 --show-bin-path)/Deskbit"
-  swift build -c release --arch x86_64
-  intel_binary="$(swift build -c release --arch x86_64 --show-bin-path)/Deskbit"
-  lipo -create "$arm_binary" "$intel_binary" -output "$contents_dir/MacOS/Deskbit"
-  resource_bundle="${arm_binary:h}/Deskbit_Deskbit.bundle"
-else
-  swift build -c "$configuration"
-  binary_path="$(swift build -c "$configuration" --show-bin-path)/Deskbit"
-  cp "$binary_path" "$contents_dir/MacOS/Deskbit"
-  resource_bundle="${binary_path:h}/Deskbit_Deskbit.bundle"
-fi
-
-ditto "$resource_bundle" "$contents_dir/Resources/Deskbit_Deskbit.bundle"
+# Deskbit ships for Apple Silicon only.
+swift build -c "$configuration" --arch arm64
+binary_path="$(swift build -c "$configuration" --arch arm64 --show-bin-path)/Deskbit"
+cp "$binary_path" "$contents_dir/MacOS/Deskbit"
 
 icon_work="$project_dir/.build/Deskbit.iconset"
 mkdir -p "$icon_work"
@@ -59,10 +48,9 @@ plutil -insert CFBundleName -string "Deskbit" "$contents_dir/Info.plist"
 plutil -insert CFBundlePackageType -string "APPL" "$contents_dir/Info.plist"
 plutil -insert CFBundleShortVersionString -string "$marketing_version" "$contents_dir/Info.plist"
 plutil -insert CFBundleVersion -string "$build_number" "$contents_dir/Info.plist"
-plutil -insert CFBundleDevelopmentRegion -string "en" "$contents_dir/Info.plist"
-plutil -insert CFBundleLocalizations -json '["en","zh-Hans"]' "$contents_dir/Info.plist"
+plutil -insert CFBundleDevelopmentRegion -string "zh_CN" "$contents_dir/Info.plist"
 plutil -insert LSMinimumSystemVersion -string "11.0" "$contents_dir/Info.plist"
-plutil -insert LSArchitecturePriority -json '["arm64","x86_64"]' "$contents_dir/Info.plist"
+plutil -insert LSArchitecturePriority -json '["arm64"]' "$contents_dir/Info.plist"
 plutil -insert LSUIElement -bool true "$contents_dir/Info.plist"
 plutil -insert NSUserNotificationAlertStyle -string "alert" "$contents_dir/Info.plist"
 
