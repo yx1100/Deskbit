@@ -175,6 +175,27 @@ enum NoteLinks {
         return nil
     }
 
+    /// Adds link attributes to URLs in `range` that are not already links.
+    static func detectLinks(in textView: NSTextView, range: NSRange) {
+        guard let storage = textView.textStorage, storage.length > 0,
+              let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else { return }
+        let location = min(max(0, range.location), storage.length)
+        let searchRange = NSRange(location: location, length: min(max(0, range.length), storage.length - location))
+        guard searchRange.length > 0 else { return }
+        var changed = false
+        for match in detector.matches(in: storage.string, range: searchRange) {
+            guard let url = match.url else { continue }
+            var hasLink = false
+            storage.enumerateAttribute(.link, in: match.range) { value, _, stop in
+                if value != nil { hasLink = true; stop.pointee = true }
+            }
+            guard !hasLink else { continue }
+            storage.addAttribute(.link, value: url, range: match.range)
+            changed = true
+        }
+        if changed { textView.didChangeText() }
+    }
+
     /// ⌘K: link the selection, edit the link under the cursor, or insert a new link.
     static func editLink(in textView: NSTextView) {
         guard let storage = textView.textStorage else { return }

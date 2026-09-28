@@ -1,9 +1,9 @@
 import AppKit
 
 enum NoteAppearance {
-    static let defaultSize = NSSize(width: 300, height: 200)
-    static let minimumSize = NSSize(width: 280, height: 160)
-    static let bodyFontSize: CGFloat = 18
+    static let defaultSize = NSSize(width: 340, height: 260)
+    static let minimumSize = NSSize(width: 300, height: 200)
+    static let bodyFontSize: CGFloat = 24
     static let cornerRadius: CGFloat = 16
 
     /// Floating glass controls: the top strip doubles as the drag handle,
@@ -22,9 +22,11 @@ enum NoteAppearance {
     }
 
     /// Earlier text sizes, keyed by their body size: body, headings and inline code map to today's sizes.
+    /// Checked in this order: the 16 pt era also used 18 pt, for third-level headings.
     private static let legacySizes: [(body: CGFloat, sizes: [CGFloat: CGFloat])] = [
-        (16, [16: 18, 24: 26, 20: 22, 18: 20, 15: 17]),
-        (13, [13: 18, 20: 26, 17: 22, 15: 20, 12: 17])
+        (16, [16: 24, 24: 34, 20: 30, 18: 27, 15: 23]),
+        (13, [13: 24, 20: 34, 17: 30, 15: 27, 12: 23]),
+        (18, [18: 24, 26: 34, 22: 30, 20: 27, 17: 23])
     ]
 
     /// Enlarges text saved with an earlier body size. Returns whether anything changed.

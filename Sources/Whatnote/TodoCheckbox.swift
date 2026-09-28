@@ -25,7 +25,7 @@ enum TodoMarker {
 
 enum TodoCheckbox {
     static func diameter(for font: NSFont) -> CGFloat {
-        (font.pointSize * 0.95).rounded()
+        min(20, (font.pointSize * 0.85).rounded())
     }
 
     /// Space the marker takes in the line: the circle plus a small gap before the following space.

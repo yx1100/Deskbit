@@ -52,13 +52,12 @@ struct ToolbarProbe {
             "加粗（⌘B）",
             "项目符号（⌘⇧8；Tab / Shift+Tab 调整级别）",
             "待办事项（⌘⇧X）",
-            "链接（⌘K）",
             "插入图片（也可直接粘贴或拖入）"
         ] else { exit(13) }
         formattingButtons[2].performClick(nil)
         guard delegate.todoCount == 1 else { exit(10) }
         footer.updateFormatting(isBold: true, isBulletList: false, isTodoItem: true)
-        guard formattingButtons.map(\.isActive) == [true, false, true, false, false] else { exit(16) }
+        guard formattingButtons.map(\.isActive) == [true, false, true, false] else { exit(16) }
 
         // To-do markers are drawn as circles and toggle when clicked.
         var todoNote = StickyNote.fresh()

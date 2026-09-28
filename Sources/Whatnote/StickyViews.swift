@@ -110,10 +110,9 @@ final class StickyFormattingFooterView: NSView {
     private let boldButton: NoteToolButton
     private let bulletButton: NoteToolButton
     private let todoButton: NoteToolButton
-    private let linkButton: NoteToolButton
     private let imageButton: NoteToolButton
 
-    private var buttons: [NoteToolButton] { [boldButton, bulletButton, todoButton, linkButton, imageButton] }
+    private var buttons: [NoteToolButton] { [boldButton, bulletButton, todoButton, imageButton] }
 
     override init(frame frameRect: NSRect) {
         boldButton = NoteToolButton(
@@ -131,11 +130,6 @@ final class StickyFormattingFooterView: NSView {
             fallbackSymbol: "checkmark.circle",
             tip: "待办事项（⌘⇧X）",
             action: #selector(StickyFormattingFooterView.toggleTodo)
-        )
-        linkButton = NoteToolButton(
-            symbol: "link",
-            tip: "链接（⌘K）",
-            action: #selector(StickyFormattingFooterView.editLink)
         )
         imageButton = NoteToolButton(
             symbol: "photo",
@@ -171,7 +165,6 @@ final class StickyFormattingFooterView: NSView {
     @objc private func toggleBold() { delegate?.didTapBold() }
     @objc private func toggleBullet() { delegate?.didTapBulletList() }
     @objc private func toggleTodo() { delegate?.didTapTodo() }
-    @objc private func editLink() { delegate?.didTapLink() }
     @objc private func insertImage() { delegate?.didTapImage() }
 }
 
@@ -293,7 +286,10 @@ final class StickyTextView: NSTextView {
         let pasteboard = NSPasteboard.general
         let images = NoteImages.images(on: pasteboard)
         if !images.isEmpty, NoteImages.insert(images, into: self) { return }
+        let start = selectedRange().location
         super.pasteAsPlainText(sender)
+        let end = selectedRange().location
+        NoteLinks.detectLinks(in: self, range: NSRange(location: start, length: max(0, end - start)))
     }
 
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
@@ -382,7 +378,7 @@ final class StickyRootView: NSView {
         textView.textContainer?.replaceLayoutManager(noteLayoutManager)
         textView.isRichText = true
         textView.importsGraphics = true
-        textView.isAutomaticLinkDetectionEnabled = false
+        textView.isAutomaticLinkDetectionEnabled = true
         textView.allowsUndo = true
         textView.font = NoteAppearance.bodyFont()
         textView.textColor = NoteAppearance.textColor
