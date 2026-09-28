@@ -7,10 +7,10 @@ struct ColorProbe {
             [CGFloat((hex >> 16) & 0xFF) / 255, CGFloat((hex >> 8) & 0xFF) / 255, CGFloat(hex & 0xFF) / 255]
         }
         let expected: [(NoteColor, String, String, [CGFloat], [CGFloat])] = [
-            (.blue, "blue", "蓝色", rgb(0x2A83A2), rgb(0x1B5A70)),
-            (.mint, "mint", "绿色", rgb(0x72C6B9), rgb(0x3E8F83)),
-            (.yellow, "yellow", "黄色", rgb(0xDCE49B), rgb(0x9AA24E)),
-            (.pink, "pink", "粉色", rgb(0xFCCCC6), rgb(0xD2877E))
+            (.blue, "blue", "蓝色", rgb(0xCFE6F5), rgb(0x2E7DA6)),
+            (.mint, "mint", "绿色", rgb(0xCDEEE6), rgb(0x2A8475)),
+            (.yellow, "yellow", "黄色", rgb(0xF6F0BE), rgb(0x7F7A22)),
+            (.pink, "pink", "粉色", rgb(0xFBD9D4), rgb(0xC0625A))
         ]
 
         guard NoteColor.allCases == expected.map(\.0) else { exit(1) }

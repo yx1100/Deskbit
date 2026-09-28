@@ -7,23 +7,23 @@ enum NoteColor: String, Codable, CaseIterable {
     case yellow
     case pink
 
-    /// The note paper, also the fill of the color dot.
+    /// The note paper, also the fill of the color dot. Light tints keep black text at 10:1 contrast or better.
     var background: NSColor {
         switch self {
-        case .blue: return Self.srgb(0x2A83A2)
-        case .mint: return Self.srgb(0x72C6B9)
-        case .yellow: return Self.srgb(0xDCE49B)
-        case .pink: return Self.srgb(0xFCCCC6)
+        case .blue: return Self.srgb(0xCFE6F5)
+        case .mint: return Self.srgb(0xCDEEE6)
+        case .yellow: return Self.srgb(0xF6F0BE)
+        case .pink: return Self.srgb(0xFBD9D4)
         }
     }
 
     /// Deeper shade for the dot's ring, checked to-do circles and active buttons.
     var accent: NSColor {
         switch self {
-        case .blue: return Self.srgb(0x1B5A70)
-        case .mint: return Self.srgb(0x3E8F83)
-        case .yellow: return Self.srgb(0x9AA24E)
-        case .pink: return Self.srgb(0xD2877E)
+        case .blue: return Self.srgb(0x2E7DA6)
+        case .mint: return Self.srgb(0x2A8475)
+        case .yellow: return Self.srgb(0x7F7A22)
+        case .pink: return Self.srgb(0xC0625A)
         }
     }
 

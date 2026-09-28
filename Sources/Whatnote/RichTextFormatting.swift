@@ -57,6 +57,10 @@ enum RichTextFormatting {
                 adjustSelection(location: &newLocation, length: &newLength, changeAt: start, delta: -2)
                 applyTodoCompletion(false, storage: storage, paragraphStart: min(start, storage.length))
             } else if todoState(in: storage.string, at: start) == .plain {
+                if let ordered = orderedMarker(in: storage.string, at: start) {
+                    storage.replaceCharacters(in: NSRange(location: start, length: ordered.length), with: "")
+                    adjustSelection(location: &newLocation, length: &newLength, changeAt: start, delta: -ordered.length)
+                }
                 if hasBullet(in: storage.string, at: start) {
                     storage.replaceCharacters(in: NSRange(location: start, length: 1), with: pendingTodoMarker)
                     applyListIndent(false, storage: storage, location: start)
@@ -132,6 +136,10 @@ enum RichTextFormatting {
                 adjustSelection(location: &newLocation, length: &newLength, changeAt: start, delta: -2)
                 applyListIndent(false, storage: storage, location: min(start, storage.length))
             } else if !allBulleted, !hasBullet(in: storage.string, at: start) {
+                if let ordered = orderedMarker(in: storage.string, at: start) {
+                    storage.replaceCharacters(in: NSRange(location: start, length: ordered.length), with: "")
+                    adjustSelection(location: &newLocation, length: &newLength, changeAt: start, delta: -ordered.length)
+                }
                 if todoState(in: storage.string, at: start) == .plain {
                     insertMarker("• ", at: start, storage: storage, textView: textView)
                     adjustSelection(location: &newLocation, length: &newLength, changeAt: start, delta: 2)
@@ -203,13 +211,18 @@ enum RichTextFormatting {
         guard let storage = textView.textStorage else { return false }
         let selection = textView.selectedRange()
         guard selection.length == 0, selection.location >= 2 else { return false }
-        let start = selection.location - 2
         let nsString = storage.string as NSString
-        guard nsString.paragraphRange(for: NSRange(location: start, length: 0)).location == start,
-              todoState(in: storage.string, at: start) != .plain || hasBullet(in: storage.string, at: start) else {
+        let start = nsString.paragraphRange(for: NSRange(location: selection.location - 1, length: 0)).location
+        let markerLength: Int
+        if todoState(in: storage.string, at: start) != .plain || hasBullet(in: storage.string, at: start) {
+            markerLength = 2
+        } else if let ordered = orderedMarker(in: storage.string, at: start) {
+            markerLength = ordered.length
+        } else {
             return false
         }
-        let markerRange = NSRange(location: start, length: 2)
+        guard start + markerLength == selection.location else { return false }
+        let markerRange = NSRange(location: start, length: markerLength)
         guard textView.shouldChangeText(in: markerRange, replacementString: "") else { return false }
         storage.beginEditing()
         storage.replaceCharacters(in: markerRange, with: "")
@@ -280,6 +293,96 @@ enum RichTextFormatting {
         guard let storage = textView.textStorage else { return .plain }
         let start = paragraphStarts(in: storage.string, selection: textView.selectedRange()).first ?? 0
         return todoState(in: storage.string, at: start)
+    }
+
+    /// The numbered-list button: numbers the selected lines, continuing a list right above
+    /// them, or removes the numbers when every selected line already has one.
+    static func toggleOrderedList(in textView: NSTextView) {
+        guard let storage = textView.textStorage else { return }
+        let selected = textView.selectedRange()
+        let starts = paragraphStarts(in: storage.string, selection: selected)
+        let allOrdered = !starts.isEmpty && starts.allSatisfy { orderedMarker(in: storage.string, at: $0) != nil }
+        var firstNumber = 1
+        if let first = starts.first, first > 0 {
+            let previous = (storage.string as NSString).paragraphRange(for: NSRange(location: first - 1, length: 0))
+            if let marker = orderedMarker(in: storage.string, at: previous.location) {
+                firstNumber = marker.number + 1
+            }
+        }
+        var newLocation = selected.location
+        var newLength = selected.length
+
+        storage.beginEditing()
+        for (index, start) in starts.enumerated().reversed() {
+            if let ordered = orderedMarker(in: storage.string, at: start) {
+                storage.replaceCharacters(in: NSRange(location: start, length: ordered.length), with: "")
+                adjustSelection(location: &newLocation, length: &newLength, changeAt: start, delta: -ordered.length)
+            } else if hasBullet(in: storage.string, at: start) {
+                storage.replaceCharacters(in: NSRange(location: start, length: 2), with: "")
+                adjustSelection(location: &newLocation, length: &newLength, changeAt: start, delta: -2)
+                applyListIndent(false, storage: storage, location: min(start, storage.length))
+            } else if todoState(in: storage.string, at: start) != .plain {
+                storage.replaceCharacters(in: NSRange(location: start, length: 2), with: "")
+                adjustSelection(location: &newLocation, length: &newLength, changeAt: start, delta: -2)
+                applyTodoCompletion(false, storage: storage, paragraphStart: min(start, storage.length))
+            }
+            guard !allOrdered else { continue }
+            let marker = "\(firstNumber + index). "
+            insertMarker(marker, at: start, storage: storage, textView: textView)
+            adjustSelection(location: &newLocation, length: &newLength, changeAt: start, delta: (marker as NSString).length)
+        }
+        storage.endEditing()
+
+        textView.setSelectedRange(NSRange(
+            location: min(newLocation, storage.length),
+            length: min(newLength, max(0, storage.length - newLocation))
+        ))
+        setTypingListIndent(false, textView: textView)
+        setTypingTodoCompletion(false, textView: textView)
+    }
+
+    static func isOrderedList(in textView: NSTextView) -> Bool {
+        guard let storage = textView.textStorage else { return false }
+        return paragraphStarts(in: storage.string, selection: textView.selectedRange()).first.map {
+            orderedMarker(in: storage.string, at: $0) != nil
+        } ?? false
+    }
+
+    private static let orderedMarkerExpression = try? NSRegularExpression(pattern: #"(\d{1,4})\. "#)
+
+    /// A numbered-list marker such as "12. " starting at `location`.
+    private static func orderedMarker(in string: String, at location: Int) -> (number: Int, length: Int)? {
+        let nsString = string as NSString
+        guard location < nsString.length,
+              let expression = orderedMarkerExpression,
+              let match = expression.firstMatch(
+                  in: string,
+                  options: .anchored,
+                  range: NSRange(location: location, length: nsString.length - location)
+              ),
+              let number = Int(nsString.substring(with: match.range(at: 1))) else { return nil }
+        return (number, match.range.length)
+    }
+
+    /// Keeps the numbered items after `paragraphStart` counting up from its number.
+    private static func renumberOrderedList(after paragraphStart: Int, in textView: NSTextView) {
+        guard let storage = textView.textStorage,
+              var expected = orderedMarker(in: storage.string, at: paragraphStart)?.number else { return }
+        var cursor = NSMaxRange((storage.string as NSString).paragraphRange(for: NSRange(location: paragraphStart, length: 0)))
+        while cursor < storage.length, let marker = orderedMarker(in: storage.string, at: cursor) {
+            expected += 1
+            let paragraphEnd = NSMaxRange((storage.string as NSString).paragraphRange(for: NSRange(location: cursor, length: 0)))
+            guard marker.number != expected else {
+                cursor = paragraphEnd
+                continue
+            }
+            let replacement = "\(expected). "
+            let range = NSRange(location: cursor, length: marker.length)
+            guard textView.shouldChangeText(in: range, replacementString: replacement) else { return }
+            storage.replaceCharacters(in: range, with: replacement)
+            textView.didChangeText()
+            cursor = paragraphEnd + (replacement as NSString).length - marker.length
+        }
     }
 
     static func isBulletList(in textView: NSTextView) -> Bool {
@@ -465,6 +568,22 @@ enum RichTextFormatting {
                 storage.endEditing()
                 textView.setSelectedRange(NSRange(location: selection.location + insertion.length, length: 0))
                 textView.didChangeText()
+            }
+            return true
+        }
+
+        if let ordered = orderedMarker(in: storage.string, at: paragraph.location) {
+            let content = nsString.substring(with: paragraph).trimmingCharacters(in: .whitespacesAndNewlines)
+            if content == "\(ordered.number)." {
+                // Return on an empty numbered item ends the list.
+                let markerRange = NSRange(location: paragraph.location, length: ordered.length)
+                guard textView.shouldChangeText(in: markerRange, replacementString: "") else { return true }
+                storage.replaceCharacters(in: markerRange, with: "")
+                textView.setSelectedRange(NSRange(location: paragraph.location, length: 0))
+                textView.didChangeText()
+            } else {
+                textView.insertText("\n\(ordered.number + 1). ", replacementRange: selection)
+                renumberOrderedList(after: selection.location + 1, in: textView)
             }
             return true
         }

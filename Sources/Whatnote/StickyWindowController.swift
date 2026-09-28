@@ -27,6 +27,7 @@ final class StickyWindowController: NSWindowController, NSWindowDelegate, NSText
         rootView.textView.delegate = self
         rootView.textView.onToggleBold = { [weak self] in self?.didTapBold() }
         rootView.textView.onToggleBulletList = { [weak self] in self?.didTapBulletList() }
+        rootView.textView.onToggleOrderedList = { [weak self] in self?.didTapOrderedList() }
         rootView.textView.onToggleTodo = { [weak self] in self?.didTapTodo() }
         rootView.textView.onEditLink = { [weak self] in self?.didTapLink() }
         rootView.textView.onToggleTodoMarker = { [weak self] index in self?.toggleTodoMarker(at: index) }
@@ -143,6 +144,13 @@ final class StickyWindowController: NSWindowController, NSWindowDelegate, NSText
     func didTapBulletList() {
         let textView = rootView.textView
         RichTextFormatting.toggleBulletList(in: textView)
+        textView.didChangeText()
+        window?.makeFirstResponder(textView)
+    }
+
+    func didTapOrderedList() {
+        let textView = rootView.textView
+        RichTextFormatting.toggleOrderedList(in: textView)
         textView.didChangeText()
         window?.makeFirstResponder(textView)
     }
@@ -301,6 +309,7 @@ final class StickyWindowController: NSWindowController, NSWindowDelegate, NSText
         rootView.footer.updateFormatting(
             isBold: RichTextFormatting.isBold(in: textView),
             isBulletList: RichTextFormatting.isBulletList(in: textView),
+            isOrderedList: RichTextFormatting.isOrderedList(in: textView),
             isTodoItem: RichTextFormatting.todoState(in: textView) != .plain
         )
     }

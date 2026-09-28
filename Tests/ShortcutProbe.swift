@@ -10,11 +10,13 @@ struct ShortcutProbe {
         var bulletCount = 0
         var todoCount = 0
         var linkCount = 0
+        var orderedCount = 0
         var indentationDeltas: [Int] = []
         editor.onToggleBold = { boldCount += 1 }
         editor.onToggleBulletList = { bulletCount += 1 }
         editor.onToggleTodo = { todoCount += 1 }
         editor.onEditLink = { linkCount += 1 }
+        editor.onToggleOrderedList = { orderedCount += 1 }
         editor.onAdjustBulletLevel = { delta in
             indentationDeltas.append(delta)
             return true
@@ -36,6 +38,9 @@ struct ShortcutProbe {
         let link = keyEvent(modifiers: [.command], characters: "k", ignoringModifiers: "k")
         _ = editor.performKeyEquivalent(with: link)
 
+        let ordered = keyEvent(modifiers: [.command, .shift], characters: "&", ignoringModifiers: "7")
+        _ = editor.performKeyEquivalent(with: ordered)
+
         editor.insertTab(nil)
         editor.insertBacktab(nil)
 
@@ -51,6 +56,7 @@ struct ShortcutProbe {
               bulletCount == 1,
               todoCount == 1,
               linkCount == 1,
+              orderedCount == 1,
               markdownAsteriskPassedThrough,
               indentationDeltas == [1, -1],
               editingShortcuts == [.copy, .cut, .paste, .selectAll] else { exit(1) }

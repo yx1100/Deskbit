@@ -237,7 +237,31 @@ struct RichTextProbe {
                   (emptyEditor.typingAttributes[.font] as? NSFont)?.pointSize == 18 else { exit(3) }
         }
 
-        let checkboxClicks = firstChecked && secondUnchecked && plainIgnored && buttonAdds && buttonRemoves
+        // Numbered lists: the button numbers lines, Return continues and renumbers,
+        // Return on an empty item and backspace after the number end the item.
+        let orderedEditor = NSTextView()
+        orderedEditor.isRichText = true
+        orderedEditor.allowsUndo = true
+        orderedEditor.string = "买菜\n做饭"
+        orderedEditor.setSelectedRange(NSRange(location: 0, length: orderedEditor.string.utf16.count))
+        RichTextFormatting.toggleOrderedList(in: orderedEditor)
+        let orderedOn = orderedEditor.string == "1. 买菜\n2. 做饭" && RichTextFormatting.isOrderedList(in: orderedEditor)
+        orderedEditor.setSelectedRange(NSRange(location: 5, length: 0))
+        let orderedContinues = RichTextFormatting.handleStructuredNewline(in: orderedEditor)
+            && orderedEditor.string == "1. 买菜\n2. \n3. 做饭"
+        let orderedEmptyEnds = RichTextFormatting.handleStructuredNewline(in: orderedEditor)
+            && orderedEditor.string == "1. 买菜\n\n3. 做饭"
+        orderedEditor.setSelectedRange(NSRange(location: 10, length: 0))
+        let orderedBackspace = RichTextFormatting.handleMarkerBackspace(in: orderedEditor)
+            && orderedEditor.string == "1. 买菜\n\n做饭"
+        orderedEditor.setSelectedRange(NSRange(location: 0, length: orderedEditor.string.utf16.count))
+        RichTextFormatting.toggleOrderedList(in: orderedEditor)
+        let orderedMixed = orderedEditor.string == "1. 买菜\n2. \n3. 做饭"
+        RichTextFormatting.toggleOrderedList(in: orderedEditor)
+        let orderedOff = orderedEditor.string == "买菜\n\n做饭"
+        let orderedList = orderedOn && orderedContinues && orderedEmptyEnds && orderedBackspace && orderedMixed && orderedOff
+
+        let checkboxClicks = firstChecked && secondUnchecked && plainIgnored && buttonAdds && buttonRemoves && orderedList
             && todoBackspace && bulletBackspace && ordinaryBackspace && repaired
 
         let extendedMarkdown = strikeMarkdown && headingMarkdown && italicMarkdown && arithmeticUntouched

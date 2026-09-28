@@ -51,13 +51,15 @@ struct ToolbarProbe {
         guard formattingButtons.compactMap({ $0.accessibilityLabel() }) == [
             "加粗（⌘B）",
             "项目符号（⌘⇧8；Tab / Shift+Tab 调整级别）",
+            "编号列表（⌘⇧7）",
             "待办事项（⌘⇧X）",
             "插入图片（也可直接粘贴或拖入）"
         ] else { exit(13) }
         formattingButtons[2].performClick(nil)
-        guard delegate.todoCount == 1 else { exit(10) }
-        footer.updateFormatting(isBold: true, isBulletList: false, isTodoItem: true)
-        guard formattingButtons.map(\.isActive) == [true, false, true, false] else { exit(16) }
+        formattingButtons[3].performClick(nil)
+        guard delegate.orderedCount == 1, delegate.todoCount == 1 else { exit(10) }
+        footer.updateFormatting(isBold: true, isBulletList: false, isOrderedList: true, isTodoItem: false)
+        guard formattingButtons.map(\.isActive) == [true, false, true, false, false] else { exit(16) }
 
         // To-do markers are drawn as circles and toggle when clicked.
         var todoNote = StickyNote.fresh()
@@ -90,12 +92,14 @@ struct ToolbarProbe {
 private final class ToolbarDelegateProbe: StickyToolbarDelegate {
     var arrangeCount = 0
     var todoCount = 0
+    var orderedCount = 0
 
     func didChooseColor(_ color: NoteColor) {}
     func didTapArrange() { arrangeCount += 1 }
     func didBeginToolbarDrag(with event: NSEvent) {}
     func didTapBold() {}
     func didTapBulletList() {}
+    func didTapOrderedList() { orderedCount += 1 }
     func didTapTodo() { todoCount += 1 }
     func didTapLink() {}
     func didTapImage() {}

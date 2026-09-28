@@ -7,6 +7,7 @@ protocol StickyToolbarDelegate: AnyObject {
     func didBeginToolbarDrag(with event: NSEvent)
     func didTapBold()
     func didTapBulletList()
+    func didTapOrderedList()
     func didTapTodo()
     func didTapLink()
     func didTapImage()
@@ -109,10 +110,11 @@ final class StickyFormattingFooterView: NSView {
     weak var delegate: StickyToolbarDelegate?
     private let boldButton: NoteToolButton
     private let bulletButton: NoteToolButton
+    private let orderedButton: NoteToolButton
     private let todoButton: NoteToolButton
     private let imageButton: NoteToolButton
 
-    private var buttons: [NoteToolButton] { [boldButton, bulletButton, todoButton, imageButton] }
+    private var buttons: [NoteToolButton] { [boldButton, bulletButton, orderedButton, todoButton, imageButton] }
 
     override init(frame frameRect: NSRect) {
         boldButton = NoteToolButton(
@@ -124,6 +126,12 @@ final class StickyFormattingFooterView: NSView {
             symbol: "list.bullet",
             tip: "项目符号（⌘⇧8；Tab / Shift+Tab 调整级别）",
             action: #selector(StickyFormattingFooterView.toggleBullet)
+        )
+        orderedButton = NoteToolButton(
+            symbol: "list.number",
+            fallbackSymbol: "list.bullet",
+            tip: "编号列表（⌘⇧7）",
+            action: #selector(StickyFormattingFooterView.toggleOrdered)
         )
         todoButton = NoteToolButton(
             symbol: "checklist",
@@ -152,9 +160,10 @@ final class StickyFormattingFooterView: NSView {
 
     required init?(coder: NSCoder) { nil }
 
-    func updateFormatting(isBold: Bool, isBulletList: Bool, isTodoItem: Bool) {
+    func updateFormatting(isBold: Bool, isBulletList: Bool, isOrderedList: Bool, isTodoItem: Bool) {
         boldButton.isActive = isBold
         bulletButton.isActive = isBulletList
+        orderedButton.isActive = isOrderedList
         todoButton.isActive = isTodoItem
     }
 
@@ -164,6 +173,7 @@ final class StickyFormattingFooterView: NSView {
 
     @objc private func toggleBold() { delegate?.didTapBold() }
     @objc private func toggleBullet() { delegate?.didTapBulletList() }
+    @objc private func toggleOrdered() { delegate?.didTapOrderedList() }
     @objc private func toggleTodo() { delegate?.didTapTodo() }
     @objc private func insertImage() { delegate?.didTapImage() }
 }
@@ -186,6 +196,7 @@ enum StickyEditingShortcut: Equatable {
 final class StickyTextView: NSTextView {
     var onToggleBold: (() -> Void)?
     var onToggleBulletList: (() -> Void)?
+    var onToggleOrderedList: (() -> Void)?
     var onToggleTodo: (() -> Void)?
     var onEditLink: (() -> Void)?
     /// Called with the marker's character index when a to-do checkbox is clicked.
@@ -240,6 +251,10 @@ final class StickyTextView: NSTextView {
         let isBulletShortcut = modifiers == [.command, .shift] && (key == "8" || key == "*")
         if isBulletShortcut {
             onToggleBulletList?()
+            return true
+        }
+        if modifiers == [.command, .shift], key == "7" || key == "&" {
+            onToggleOrderedList?()
             return true
         }
         if modifiers == [.command, .shift], key == "x" {
