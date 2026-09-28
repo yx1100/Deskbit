@@ -5,7 +5,6 @@ import UserNotifications
 final class AppController: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate, NSPopoverDelegate, DeskbitStatusMenuTarget {
     private var controllers: [UUID: StickyWindowController] = [:]
     private var statusItem: NSStatusItem!
-    private let hiddenMenu = NSMenuItem(title: "显示隐藏的便签", action: nil, keyEquivalent: "")
     private var selectedNoteIDs: Set<UUID> = []
     private var selectionOverlay: SelectionOverlayWindowController?
     private var historyPopover: NSPopover?
@@ -43,7 +42,6 @@ final class AppController: NSObject, NSApplicationDelegate, UNUserNotificationCe
             notes.forEach { open($0) }
             if !notes.contains(where: { !$0.isHidden }) { showAllNotes() }
         }
-        refreshMenu()
     }
 
     func createNote(near sourceFrame: NSRect? = nil, in visibleFrame: NSRect? = nil) {
@@ -54,7 +52,6 @@ final class AppController: NSObject, NSApplicationDelegate, UNUserNotificationCe
             }
         }
         open(NoteStore.shared.add(frame: frame), focus: true)
-        refreshMenu()
     }
 
     func completeNote(id: UUID) {
@@ -64,31 +61,12 @@ final class AppController: NSObject, NSApplicationDelegate, UNUserNotificationCe
         selectedNoteIDs.remove(id)
         NoteStore.shared.complete(id: id)
         dismissHistoryPopover()
-        refreshMenu()
-    }
-
-    func refreshMenu() {
-        let hidden = NoteStore.shared.activeNotes.filter(\.isHidden)
-        hiddenMenu.submenu = nil
-        hiddenMenu.isEnabled = !hidden.isEmpty
-        guard !hidden.isEmpty else { return }
-
-        let submenu = NSMenu()
-        for note in hidden {
-            let title = note.text.split(separator: "\n").first.map(String.init)?.prefix(28) ?? "空白便签".prefix(28)
-            let item = NSMenuItem(title: String(title), action: #selector(showHiddenNote(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = note.id.uuidString
-            submenu.addItem(item)
-        }
-        hiddenMenu.submenu = submenu
     }
 
     func show(noteID: UUID) {
         guard let note = NoteStore.shared.note(id: noteID), note.completedAt == nil else { return }
         if controllers[noteID] == nil { open(note) }
         controllers[noteID]?.showAndFocus()
-        refreshMenu()
     }
 
     private func open(_ note: StickyNote, focus: Bool = false) {
@@ -105,13 +83,13 @@ final class AppController: NSObject, NSApplicationDelegate, UNUserNotificationCe
         statusItem.isVisible = true
         // Match the visual weight of the system's menu bar icons.
         let symbol = NSImage(systemSymbolName: "note.text", accessibilityDescription: "Deskbit")?
-            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 16, weight: .regular))
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 18, weight: .regular))
         symbol?.isTemplate = true
         statusItem.button?.image = symbol
         statusItem.button?.imagePosition = .imageOnly
         statusItem.button?.title = ""
         statusItem.button?.toolTip = "Deskbit"
-        statusItem.menu = DeskbitStatusMenu.make(target: self, hiddenMenu: hiddenMenu)
+        statusItem.menu = DeskbitStatusMenu.make(target: self)
     }
 
     private func configureMainMenu() {
@@ -160,7 +138,6 @@ final class AppController: NSObject, NSApplicationDelegate, UNUserNotificationCe
                 self.dismissHistoryPopover()
                 guard let note = NoteStore.shared.restore(id: id) else { return }
                 self.open(note, focus: true)
-                self.refreshMenu()
             },
             onDelete: { [weak self] id in
                 self?.confirmDeleteHistoryNote(id: id)
@@ -462,12 +439,6 @@ final class AppController: NSObject, NSApplicationDelegate, UNUserNotificationCe
             if controllers[note.id] == nil { open(note) }
             controllers[note.id]?.gatherToCurrentDesktop()
         }
-        refreshMenu()
-    }
-
-    @objc private func showHiddenNote(_ sender: NSMenuItem) {
-        guard let value = sender.representedObject as? String, let id = UUID(uuidString: value) else { return }
-        show(noteID: id)
     }
 
     @objc func quit() { NSApp.terminate(nil) }
