@@ -61,8 +61,8 @@ final class GlassCapsuleView: NSView {
     }
 }
 
-/// Icon button for the glass bars: a solid, legible symbol with a pill behind it
-/// while hovered or while its format is active.
+/// Icon button for the glass bars. Active formats show a solid accent-colored disc
+/// with a white symbol; hovering shows a faint disc.
 final class NoteToolButton: NSButton {
     static let size: CGFloat = 28
 
@@ -110,21 +110,27 @@ final class NoteToolButton: NSButton {
     override func mouseEntered(with event: NSEvent) { isHovered = true }
     override func mouseExited(with event: NSEvent) { isHovered = false }
 
+    static let discDiameter: CGFloat = 24
+
     override func draw(_ dirtyRect: NSRect) {
-        let pillRect = bounds.insetBy(dx: 1, dy: 1)
-        let pill = NSBezierPath(roundedRect: pillRect, xRadius: pillRect.height / 2, yRadius: pillRect.height / 2)
+        let disc = NSBezierPath(ovalIn: NSRect(
+            x: bounds.midX - Self.discDiameter / 2,
+            y: bounds.midY - Self.discDiameter / 2,
+            width: Self.discDiameter,
+            height: Self.discDiameter
+        ))
         if isActive {
-            accentColor.withAlphaComponent(0.24).setFill()
-            pill.fill()
+            accentColor.setFill()
+            disc.fill()
         } else if isHovered, isEnabled {
             NSColor.black.withAlphaComponent(0.07).setFill()
-            pill.fill()
+            disc.fill()
         }
         super.draw(dirtyRect)
     }
 
     private func refreshAppearance() {
-        contentTintColor = isActive ? accentColor : NoteAppearance.iconColor
+        contentTintColor = isActive ? .white : NoteAppearance.iconColor
         needsDisplay = true
     }
 }

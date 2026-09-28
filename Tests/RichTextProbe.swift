@@ -191,7 +191,30 @@ struct RichTextProbe {
             && clickEditor.string == "☑ 买牛奶\n☐ 已完成"
             && clickEditor.textStorage?.attribute(.strikethroughStyle, at: 8, effectiveRange: nil) == nil
         let plainIgnored = !RichTextFormatting.toggleTodoCompletion(atParagraphStart: 2, in: clickEditor)
+        // Backspace right after a marker removes the whole marker instead of leaving "☐".
+        let backspaceEditor = NSTextView()
+        backspaceEditor.isRichText = true
+        backspaceEditor.allowsUndo = true
+        backspaceEditor.string = "☐ \n• 列表"
+        backspaceEditor.setSelectedRange(NSRange(location: 2, length: 0))
+        let todoBackspace = RichTextFormatting.handleMarkerBackspace(in: backspaceEditor)
+            && backspaceEditor.string == "\n• 列表"
+        backspaceEditor.setSelectedRange(NSRange(location: 3, length: 0))
+        let bulletBackspace = RichTextFormatting.handleMarkerBackspace(in: backspaceEditor)
+            && backspaceEditor.string == "\n列表"
+        backspaceEditor.setSelectedRange(NSRange(location: 2, length: 0))
+        let ordinaryBackspace = !RichTextFormatting.handleMarkerBackspace(in: backspaceEditor)
+
+        // Lines broken by older versions ("☐123") become to-dos again.
+        let repairEditor = NSTextView()
+        repairEditor.isRichText = true
+        repairEditor.string = "☐123\n☑"
+        let repaired = RichTextFormatting.normalizeTodoMarkers(in: repairEditor)
+            && repairEditor.string == "☐ 123\n☑ "
+            && !RichTextFormatting.normalizeTodoMarkers(in: repairEditor)
+
         let checkboxClicks = firstChecked && secondUnchecked && plainIgnored
+            && todoBackspace && bulletBackspace && ordinaryBackspace && repaired
 
         let extendedMarkdown = strikeMarkdown && headingMarkdown && italicMarkdown && arithmeticUntouched
             && codeMarkdown && linkMarkdown && nonLinkUntouched && todoMarkdown

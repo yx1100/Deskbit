@@ -199,6 +199,8 @@ final class StickyTextView: NSTextView {
     var onToggleTodoMarker: ((Int) -> Void)?
     var onStructuredNewline: (() -> Bool)?
     var onAdjustBulletLevel: ((Int) -> Bool)?
+    /// Returns true when it handled the key, e.g. removed a whole to-do marker.
+    var onDeleteBackward: (() -> Bool)?
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
@@ -272,6 +274,11 @@ final class StickyTextView: NSTextView {
         super.insertNewline(sender)
     }
 
+    override func deleteBackward(_ sender: Any?) {
+        if onDeleteBackward?() == true { return }
+        super.deleteBackward(sender)
+    }
+
     override func insertTab(_ sender: Any?) {
         if onAdjustBulletLevel?(1) == true { return }
         super.insertTab(sender)
@@ -286,10 +293,7 @@ final class StickyTextView: NSTextView {
         let pasteboard = NSPasteboard.general
         let images = NoteImages.images(on: pasteboard)
         if !images.isEmpty, NoteImages.insert(images, into: self) { return }
-        let start = selectedRange().location
         super.pasteAsPlainText(sender)
-        let end = selectedRange().location
-        NoteLinks.detectLinks(in: self, range: NSRange(location: start, length: max(0, end - start)))
     }
 
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
@@ -378,7 +382,7 @@ final class StickyRootView: NSView {
         textView.textContainer?.replaceLayoutManager(noteLayoutManager)
         textView.isRichText = true
         textView.importsGraphics = true
-        textView.isAutomaticLinkDetectionEnabled = true
+        textView.isAutomaticLinkDetectionEnabled = false
         textView.allowsUndo = true
         textView.font = NoteAppearance.bodyFont()
         textView.textColor = NoteAppearance.textColor

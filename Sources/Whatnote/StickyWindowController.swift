@@ -40,7 +40,13 @@ final class StickyWindowController: NSWindowController, NSWindowDelegate, NSText
             if changed { self.rootView.textView.didChangeText() }
             return changed
         }
-        if RichTextFormatting.normalizeBulletMarkers(in: rootView.textView) {
+        rootView.textView.onDeleteBackward = { [weak self] in
+            guard let self else { return false }
+            return RichTextFormatting.handleMarkerBackspace(in: self.rootView.textView)
+        }
+        let repairedBullets = RichTextFormatting.normalizeBulletMarkers(in: rootView.textView)
+        let repairedTodos = RichTextFormatting.normalizeTodoMarkers(in: rootView.textView)
+        if repairedBullets || repairedTodos {
             self.note.text = rootView.textView.string
             self.note.richTextData = rootView.textView.textStorage.flatMap(RichTextCodec.encode)
             NoteStore.shared.update(self.note)

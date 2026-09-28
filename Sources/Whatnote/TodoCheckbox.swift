@@ -24,22 +24,37 @@ enum TodoMarker {
 }
 
 enum TodoCheckbox {
+    static func diameter(for font: NSFont) -> CGFloat {
+        (font.pointSize * 0.95).rounded()
+    }
+
+    /// Space the marker takes in the line: the circle plus a small gap before the following space.
+    static func markerWidth(for font: NSFont) -> CGFloat {
+        diameter(for: font) + 4
+    }
+
     /// Where the checkbox for the marker glyph sits, in text container coordinates.
     static func rect(forGlyphAt glyphIndex: Int, layoutManager: NSLayoutManager) -> NSRect {
         let lineRect = layoutManager.lineFragmentRect(forGlyphAt: glyphIndex, effectiveRange: nil)
         let location = layoutManager.location(forGlyphAt: glyphIndex)
         let characterIndex = layoutManager.characterIndexForGlyph(at: glyphIndex)
-        let font = layoutManager.textStorage?.attribute(.font, at: characterIndex, effectiveRange: nil) as? NSFont
-            ?? NoteAppearance.bodyFont()
-        let diameter = min(18, max(12, font.pointSize + 1))
+        let markerFont = font(at: characterIndex, in: layoutManager.textStorage)
+        // Center on the item's text, which follows the marker and its space.
+        let textFont = font(at: characterIndex + 2, in: layoutManager.textStorage) ?? markerFont
+        let size = diameter(for: markerFont ?? NoteAppearance.bodyFont())
         let baseline = lineRect.minY + location.y
-        let centerY = baseline - font.capHeight / 2
+        let centerY = baseline - (textFont ?? NoteAppearance.bodyFont()).pointSize * 0.33
         return NSRect(
-            x: lineRect.minX + location.x + 0.5,
-            y: centerY - diameter / 2,
-            width: diameter,
-            height: diameter
+            x: lineRect.minX + location.x,
+            y: (centerY - size / 2).rounded(),
+            width: size,
+            height: size
         )
+    }
+
+    private static func font(at index: Int, in storage: NSTextStorage?) -> NSFont? {
+        guard let storage, index >= 0, index < storage.length else { return nil }
+        return storage.attribute(.font, at: index, effectiveRange: nil) as? NSFont
     }
 
     /// Draws into a flipped view (text views are flipped: y grows downward).
@@ -47,7 +62,7 @@ enum TodoCheckbox {
         let circle = NSBezierPath(ovalIn: rect.insetBy(dx: 0.75, dy: 0.75))
         guard isCompleted else {
             NoteAppearance.checkboxStrokeColor.setStroke()
-            circle.lineWidth = 1.3
+            circle.lineWidth = 1.4
             circle.stroke()
             return
         }
@@ -57,7 +72,7 @@ enum TodoCheckbox {
         check.move(to: NSPoint(x: rect.minX + rect.width * 0.29, y: rect.minY + rect.height * 0.52))
         check.line(to: NSPoint(x: rect.minX + rect.width * 0.44, y: rect.minY + rect.height * 0.67))
         check.line(to: NSPoint(x: rect.minX + rect.width * 0.72, y: rect.minY + rect.height * 0.35))
-        check.lineWidth = max(1.4, rect.width * 0.11)
+        check.lineWidth = max(1.5, rect.width * 0.11)
         check.lineCapStyle = .round
         check.lineJoinStyle = .round
         NSColor.white.setStroke()
@@ -66,9 +81,95 @@ enum TodoCheckbox {
 }
 
 /// Draws to-do markers as round checkboxes in place of the ☐ / ☑ glyphs.
-final class NoteLayoutManager: NSLayoutManager {
+/// The marker glyph is laid out as fixed-width whitespace, so the gap between
+/// the circle and the text does not depend on which font happens to draw ☐.
+final class NoteLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
     /// Fill of checked circles; follows the note color.
     var checkboxAccent: NSColor = NoteAppearance.iconColor
+
+    override init() {
+        super.init()
+        delegate = self
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        delegate = self
+    }
+
+    /// Whether a character is a marker depends on its neighbors, so re-layout whole paragraphs.
+    override func invalidateGlyphs(
+        forCharacterRange charRange: NSRange,
+        changeInLength delta: Int,
+        actualCharacterRange actualCharRange: NSRangePointer?
+    ) {
+        guard let string = textStorage?.string as NSString?, charRange.location <= string.length else {
+            super.invalidateGlyphs(forCharacterRange: charRange, changeInLength: delta, actualCharacterRange: actualCharRange)
+            return
+        }
+        let length = min(charRange.length, string.length - charRange.location)
+        let paragraphs = string.paragraphRange(for: NSRange(location: charRange.location, length: length))
+        super.invalidateGlyphs(
+            forCharacterRange: NSUnionRange(charRange, paragraphs),
+            changeInLength: delta,
+            actualCharacterRange: actualCharRange
+        )
+    }
+
+    func layoutManager(
+        _ layoutManager: NSLayoutManager,
+        shouldGenerateGlyphs glyphs: UnsafePointer<CGGlyph>,
+        properties props: UnsafePointer<NSLayoutManager.GlyphProperty>,
+        characterIndexes charIndexes: UnsafePointer<Int>,
+        font aFont: NSFont,
+        forGlyphRange glyphRange: NSRange
+    ) -> Int {
+        guard let storage = layoutManager.textStorage else { return 0 }
+        let string = storage.string as NSString
+        var properties: [NSLayoutManager.GlyphProperty]?
+        for offset in 0..<glyphRange.length
+        where TodoMarker.isCompleted(in: string, at: charIndexes[offset]) != nil {
+            if properties == nil {
+                properties = Array(UnsafeBufferPointer(start: props, count: glyphRange.length))
+            }
+            properties?[offset] = .controlCharacter
+        }
+        guard let properties else { return 0 }
+        properties.withUnsafeBufferPointer { buffer in
+            guard let base = buffer.baseAddress else { return }
+            layoutManager.setGlyphs(
+                glyphs,
+                properties: base,
+                characterIndexes: charIndexes,
+                font: aFont,
+                forGlyphRange: glyphRange
+            )
+        }
+        return glyphRange.length
+    }
+
+    func layoutManager(
+        _ layoutManager: NSLayoutManager,
+        shouldUse action: NSLayoutManager.ControlCharacterAction,
+        forControlCharacterAt charIndex: Int
+    ) -> NSLayoutManager.ControlCharacterAction {
+        guard let storage = layoutManager.textStorage,
+              TodoMarker.isCompleted(in: storage.string as NSString, at: charIndex) != nil else { return action }
+        return .whitespace
+    }
+
+    func layoutManager(
+        _ layoutManager: NSLayoutManager,
+        boundingBoxForControlGlyphAt glyphIndex: Int,
+        for textContainer: NSTextContainer,
+        proposedLineFragment proposedRect: NSRect,
+        glyphPosition: NSPoint,
+        characterIndex charIndex: Int
+    ) -> NSRect {
+        let font = layoutManager.textStorage?.attribute(.font, at: charIndex, effectiveRange: nil) as? NSFont
+            ?? NoteAppearance.bodyFont()
+        return NSRect(x: glyphPosition.x, y: glyphPosition.y, width: TodoCheckbox.markerWidth(for: font), height: 0)
+    }
 
     override func drawGlyphs(forGlyphRange glyphsToShow: NSRange, at origin: NSPoint) {
         guard glyphsToShow.length > 0, let storage = textStorage else {

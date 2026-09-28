@@ -181,6 +181,52 @@ enum RichTextFormatting {
         return changed
     }
 
+    /// Backspace right after a to-do or list marker removes the whole marker, turning
+    /// the line into plain text. Deleting only the space would leave a bare "☐" glyph.
+    static func handleMarkerBackspace(in textView: NSTextView) -> Bool {
+        guard let storage = textView.textStorage else { return false }
+        let selection = textView.selectedRange()
+        guard selection.length == 0, selection.location >= 2 else { return false }
+        let start = selection.location - 2
+        let nsString = storage.string as NSString
+        guard nsString.paragraphRange(for: NSRange(location: start, length: 0)).location == start,
+              todoState(in: storage.string, at: start) != .plain || hasBullet(in: storage.string, at: start) else {
+            return false
+        }
+        let markerRange = NSRange(location: start, length: 2)
+        guard textView.shouldChangeText(in: markerRange, replacementString: "") else { return false }
+        storage.beginEditing()
+        storage.replaceCharacters(in: markerRange, with: "")
+        applyTodoCompletion(false, storage: storage, paragraphStart: start)
+        applyListIndent(false, storage: storage, location: start)
+        storage.endEditing()
+        textView.setSelectedRange(NSRange(location: start, length: 0))
+        setTypingListIndent(false, textView: textView)
+        setTypingTodoCompletion(false, textView: textView)
+        textView.didChangeText()
+        return true
+    }
+
+    /// Repairs to-do markers that lost the space after them, which older versions allowed.
+    @discardableResult
+    static func normalizeTodoMarkers(in textView: NSTextView) -> Bool {
+        guard let storage = textView.textStorage, storage.length > 0 else { return false }
+        let starts = paragraphStarts(in: storage.string, selection: NSRange(location: 0, length: storage.length))
+        var changed = false
+        storage.beginEditing()
+        for start in starts.reversed() where start < storage.length {
+            let nsString = storage.string as NSString
+            let marker = nsString.substring(with: NSRange(location: start, length: 1))
+            guard marker == pendingTodoMarker || marker == completedTodoMarker,
+                  todoState(in: storage.string, at: start) == .plain else { continue }
+            let attributes = storage.attributes(at: start, effectiveRange: nil)
+            storage.insert(NSAttributedString(string: " ", attributes: attributes), at: start + 1)
+            changed = true
+        }
+        storage.endEditing()
+        return changed
+    }
+
     @discardableResult
     static func normalizeBulletMarkers(in textView: NSTextView) -> Bool {
         guard let storage = textView.textStorage, storage.length > 0 else { return false }
@@ -227,7 +273,7 @@ enum RichTextFormatting {
         } ?? false
     }
 
-    private static let headingSizes: [CGFloat] = [24, 20, 18]
+    private static let headingSizes: [CGFloat] = [26, 22, 20]
     private static let codeBackground = NSColor.black.withAlphaComponent(0.07)
 
     static func headingFont(level: Int) -> NSFont {
