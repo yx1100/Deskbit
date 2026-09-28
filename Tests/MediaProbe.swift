@@ -41,7 +41,7 @@ struct MediaProbe {
               NoteLinks.url(from: "不是网址") == nil,
               NoteLinks.url(from: "two words.com") == nil else { exit(5) }
 
-        let pasteboard = NSPasteboard(name: NSPasteboard.Name("deskbit-media-probe-\(UUID().uuidString)"))
+        let pasteboard = NSPasteboard(name: NSPasteboard.Name("whatnote-media-probe-\(UUID().uuidString)"))
         pasteboard.clearContents()
         pasteboard.writeObjects([image])
         guard NoteImages.images(on: pasteboard).count == 1 else { exit(6) }

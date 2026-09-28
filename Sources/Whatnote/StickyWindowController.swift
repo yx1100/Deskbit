@@ -5,7 +5,6 @@ final class StickyWindowController: NSWindowController, NSWindowDelegate, NSText
     private var note: StickyNote
     private let rootView: StickyRootView
     private let windowResidency: StickyWindowResidency
-    private var saveStatusTimer: Timer?
     private var isApplyingMarkdown = false
     weak var appController: AppController?
     var isPinned: Bool { note.isPinned }
@@ -30,6 +29,7 @@ final class StickyWindowController: NSWindowController, NSWindowDelegate, NSText
         rootView.textView.onToggleBulletList = { [weak self] in self?.didTapBulletList() }
         rootView.textView.onToggleTodo = { [weak self] in self?.didTapTodo() }
         rootView.textView.onEditLink = { [weak self] in self?.didTapLink() }
+        rootView.textView.onToggleTodoMarker = { [weak self] index in self?.toggleTodoMarker(at: index) }
         rootView.textView.onStructuredNewline = { [weak self] in
             guard let self else { return false }
             return RichTextFormatting.handleStructuredNewline(in: self.rootView.textView)
@@ -224,7 +224,6 @@ final class StickyWindowController: NSWindowController, NSWindowDelegate, NSText
             StickyWindowPresentation.apply(isPinned: note.isPinned, to: window)
         }
         rootView.toolbar.update(color: note.color, isPinned: note.isPinned)
-        rootView.statusLabel.stringValue = note.isPinned ? "已置顶 · 已保存" : "已保存"
         if isBecomingPinned {
             window?.orderFrontRegardless()
             if focusWhenPinned {
@@ -256,7 +255,6 @@ final class StickyWindowController: NSWindowController, NSWindowDelegate, NSText
         } else {
             StickyWindowPresentation.apply(isPinned: false, to: window)
             rootView.toolbar.update(color: note.color, isPinned: false)
-            rootView.statusLabel.stringValue = "已保存"
         }
         move(to: frame)
         self.window?.orderBack(nil)
@@ -282,15 +280,14 @@ final class StickyWindowController: NSWindowController, NSWindowDelegate, NSText
             note.richTextData = RichTextCodec.encode(storage)
         }
         NoteStore.shared.update(note)
-        rootView.statusLabel.stringValue = "正在保存…"
-        saveStatusTimer?.invalidate()
-        saveStatusTimer = Timer.scheduledTimer(
-            timeInterval: 0.45,
-            target: self,
-            selector: #selector(markSaved),
-            userInfo: nil,
-            repeats: false
-        )
+    }
+
+    /// A click on a to-do circle checks or unchecks that item.
+    private func toggleTodoMarker(at index: Int) {
+        let textView = rootView.textView
+        guard RichTextFormatting.toggleTodoCompletion(atParagraphStart: index, in: textView) else { return }
+        window?.makeFirstResponder(textView)
+        updateFormattingState()
     }
 
     private func updateFormattingState() {
@@ -300,10 +297,6 @@ final class StickyWindowController: NSWindowController, NSWindowDelegate, NSText
             isBulletList: RichTextFormatting.isBulletList(in: textView),
             isTodoItem: RichTextFormatting.todoState(in: textView) != .plain
         )
-    }
-
-    @objc private func markSaved() {
-        rootView.statusLabel.stringValue = note.isPinned ? "已置顶 · 已保存" : "已保存"
     }
 
     private func saveFrame() {

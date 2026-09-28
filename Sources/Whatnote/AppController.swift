@@ -2,7 +2,7 @@ import AppKit
 import UserNotifications
 
 @MainActor
-final class AppController: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate, NSPopoverDelegate, DeskbitStatusMenuTarget {
+final class AppController: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate, NSPopoverDelegate, AppStatusMenuTarget {
     private var controllers: [UUID: StickyWindowController] = [:]
     private var statusItem: NSStatusItem!
     private var selectedNoteIDs: Set<UUID> = []
@@ -82,14 +82,14 @@ final class AppController: NSObject, NSApplicationDelegate, UNUserNotificationCe
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         statusItem.isVisible = true
         // Match the visual weight of the system's menu bar icons.
-        let symbol = NSImage(systemSymbolName: "note.text", accessibilityDescription: "Deskbit")?
+        let symbol = NSImage(systemSymbolName: "note.text", accessibilityDescription: "随便记")?
             .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 18, weight: .regular))
         symbol?.isTemplate = true
         statusItem.button?.image = symbol
         statusItem.button?.imagePosition = .imageOnly
         statusItem.button?.title = ""
-        statusItem.button?.toolTip = "Deskbit"
-        statusItem.menu = DeskbitStatusMenu.make(target: self)
+        statusItem.button?.toolTip = "随便记"
+        statusItem.menu = AppStatusMenu.make(target: self)
     }
 
     private func configureMainMenu() {

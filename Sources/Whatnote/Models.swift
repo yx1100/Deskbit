@@ -1,33 +1,49 @@
 import AppKit
 
+/// Note colors. Raw values match earlier versions so saved notes keep their color:
+/// the former pink notes become red and the former mint notes become green.
 enum NoteColor: String, Codable, CaseIterable {
-    case yellow, blue, mint, pink
+    case red = "pink"
+    case green = "mint"
+    case blue
+    case yellow
 
+    /// The note paper, also the fill of the color dot.
     var background: NSColor {
         switch self {
-        case .yellow: return NSColor(srgbRed: 254 / 255, green: 244 / 255, blue: 156 / 255, alpha: 1)
-        case .blue: return NSColor(srgbRed: 173 / 255, green: 244 / 255, blue: 1, alpha: 1)
-        case .mint: return NSColor(srgbRed: 178 / 255, green: 1, blue: 161 / 255, alpha: 1)
-        case .pink: return NSColor(srgbRed: 1, green: 199 / 255, blue: 199 / 255, alpha: 1)
+        case .red: return Self.srgb(0xFF8077)
+        case .green: return Self.srgb(0x8AE63E)
+        case .blue: return Self.srgb(0x78B7FF)
+        case .yellow: return Self.srgb(0xF1D546)
         }
     }
 
-    var swatch: NSColor {
+    /// Deeper shade for the dot's ring, checked to-do circles and active buttons.
+    var accent: NSColor {
         switch self {
-        case .yellow: return NSColor(srgbRed: 253 / 255, green: 234 / 255, blue: 61 / 255, alpha: 1)
-        case .blue: return NSColor(srgbRed: 137 / 255, green: 241 / 255, blue: 1, alpha: 1)
-        case .mint: return NSColor(srgbRed: 131 / 255, green: 254 / 255, blue: 131 / 255, alpha: 1)
-        case .pink: return NSColor(srgbRed: 1, green: 179 / 255, blue: 178 / 255, alpha: 1)
+        case .red: return Self.srgb(0xB74A42)
+        case .green: return Self.srgb(0x52A210)
+        case .blue: return Self.srgb(0x4379B7)
+        case .yellow: return Self.srgb(0xAB9318)
         }
     }
 
     var title: String {
         switch self {
-        case .yellow: return "黄色"
+        case .red: return "红色"
+        case .green: return "绿色"
         case .blue: return "蓝色"
-        case .mint: return "绿色"
-        case .pink: return "粉色"
+        case .yellow: return "黄色"
         }
+    }
+
+    private static func srgb(_ hex: Int) -> NSColor {
+        NSColor(
+            srgbRed: CGFloat((hex >> 16) & 0xFF) / 255,
+            green: CGFloat((hex >> 8) & 0xFF) / 255,
+            blue: CGFloat(hex & 0xFF) / 255,
+            alpha: 1
+        )
     }
 }
 

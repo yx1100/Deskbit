@@ -135,7 +135,7 @@ private final class HistoryNoteRowView: NSView {
         layer?.cornerRadius = 9
         layer?.backgroundColor = note.color.background.withAlphaComponent(0.48).cgColor
 
-        let colorDot = HistoryColorDotView(color: note.color.swatch)
+        let colorDot = HistoryColorDotView(color: note.color.background, ring: note.color.accent)
         colorDot.translatesAutoresizingMaskIntoConstraints = false
         addSubview(colorDot)
 
@@ -213,16 +213,22 @@ private final class HistoryNoteRowView: NSView {
 
 private final class HistoryColorDotView: NSView {
     private let color: NSColor
+    private let ring: NSColor
 
-    init(color: NSColor) {
+    init(color: NSColor, ring: NSColor) {
         self.color = color
+        self.ring = ring
         super.init(frame: .zero)
     }
 
     required init?(coder: NSCoder) { nil }
 
     override func draw(_ dirtyRect: NSRect) {
+        let dot = NSBezierPath(ovalIn: bounds.insetBy(dx: 0.5, dy: 0.5))
         color.setFill()
-        NSBezierPath(ovalIn: bounds.insetBy(dx: 0.5, dy: 0.5)).fill()
+        dot.fill()
+        ring.setStroke()
+        dot.lineWidth = 1
+        dot.stroke()
     }
 }

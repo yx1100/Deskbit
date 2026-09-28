@@ -1,19 +1,22 @@
 import Foundation
 
 enum NoteStorage {
+    static let directoryName = "Whatnote"
+    /// Earlier names of the data folder, newest first. Their notes are copied over once.
+    static let legacyDirectoryNames = ["Deskbit", ["Desktop", "Sticky"].joined()]
+
     static func resolveFileURL(in base: URL, manager: FileManager = .default) -> URL {
-        let currentDirectory = base.appendingPathComponent("Deskbit", isDirectory: true)
+        let currentDirectory = base.appendingPathComponent(directoryName, isDirectory: true)
         let currentFile = currentDirectory.appendingPathComponent("notes.json")
         if manager.fileExists(atPath: currentFile.path) {
             return currentFile
         }
 
-        let legacyDirectoryName = ["Desktop", "Sticky"].joined()
-        let legacyFile = base
-            .appendingPathComponent(legacyDirectoryName, isDirectory: true)
-            .appendingPathComponent("notes.json")
-
-        if manager.fileExists(atPath: legacyFile.path) {
+        for legacyName in legacyDirectoryNames {
+            let legacyFile = base
+                .appendingPathComponent(legacyName, isDirectory: true)
+                .appendingPathComponent("notes.json")
+            guard manager.fileExists(atPath: legacyFile.path) else { continue }
             do {
                 try manager.createDirectory(at: currentDirectory, withIntermediateDirectories: true)
                 try manager.copyItem(at: legacyFile, to: currentFile)

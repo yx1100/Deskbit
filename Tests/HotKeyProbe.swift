@@ -4,7 +4,7 @@ import Carbon.HIToolbox
 @main
 struct HotKeyProbe {
     static func main() {
-        let defaults = UserDefaults(suiteName: "deskbit-hotkey-probe-\(UUID().uuidString)")!
+        let defaults = UserDefaults(suiteName: "whatnote-hotkey-probe-\(UUID().uuidString)")!
 
         let fallback = HotKeyPreferences.newNoteShortcut(in: defaults)
         guard fallback == .defaultNewNote,

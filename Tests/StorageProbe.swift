@@ -19,9 +19,21 @@ struct StorageProbe {
         try savedNotes.write(to: legacyFile)
 
         let migratedFile = NoteStorage.resolveFileURL(in: migrationBase, manager: manager)
-        precondition(migratedFile == migrationBase.appendingPathComponent("Deskbit/notes.json"))
+        precondition(migratedFile == migrationBase.appendingPathComponent("Whatnote/notes.json"))
         let migratedNotes = try Data(contentsOf: migratedFile)
         precondition(migratedNotes == savedNotes)
+
+        // Notes from the Deskbit era move to the new folder; the old copy stays as a backup.
+        let renameBase = root.appendingPathComponent("rename", isDirectory: true)
+        let deskbitDirectory = renameBase.appendingPathComponent("Deskbit", isDirectory: true)
+        try manager.createDirectory(at: deskbitDirectory, withIntermediateDirectories: true)
+        let deskbitNotes = Data("deskbit notes".utf8)
+        try deskbitNotes.write(to: deskbitDirectory.appendingPathComponent("notes.json"))
+        let renamedFile = NoteStorage.resolveFileURL(in: renameBase, manager: manager)
+        precondition(renamedFile == renameBase.appendingPathComponent("Whatnote/notes.json"))
+        let renamedNotes = try Data(contentsOf: renamedFile)
+        precondition(renamedNotes == deskbitNotes)
+        precondition(manager.fileExists(atPath: deskbitDirectory.appendingPathComponent("notes.json").path))
 
         let fallbackBase = root.appendingPathComponent("fallback", isDirectory: true)
         let fallbackLegacyDirectory = fallbackBase.appendingPathComponent(legacyDirectoryName, isDirectory: true)
@@ -29,7 +41,7 @@ struct StorageProbe {
         let fallbackLegacyFile = fallbackLegacyDirectory.appendingPathComponent("notes.json")
         try savedNotes.write(to: fallbackLegacyFile)
         try manager.createDirectory(at: fallbackBase, withIntermediateDirectories: true)
-        try Data("blocked".utf8).write(to: fallbackBase.appendingPathComponent("Deskbit"))
+        try Data("blocked".utf8).write(to: fallbackBase.appendingPathComponent("Whatnote"))
 
         let fallbackFile = NoteStorage.resolveFileURL(in: fallbackBase, manager: manager)
         precondition(fallbackFile == fallbackLegacyFile)
@@ -39,19 +51,19 @@ struct StorageProbe {
         let firstLaunchBase = root.appendingPathComponent("first-launch", isDirectory: true)
         let firstLaunchStore = NoteStore(baseURL: firstLaunchBase, manager: manager)
         precondition(firstLaunchStore.isFirstLaunch)
-        let attributedGuide = NSMutableAttributedString(string: "Welcome to Deskbit")
+        let attributedGuide = NSMutableAttributedString(string: "欢迎使用随便记")
         attributedGuide.addAttribute(
             .font,
             value: NoteAppearance.bodyFont(weight: .bold),
             range: NSRange(location: 0, length: 7)
         )
         let guide = firstLaunchStore.add(attributedText: attributedGuide)
-        precondition(guide.text == "Welcome to Deskbit")
+        precondition(guide.text == "欢迎使用随便记")
         precondition(guide.richTextData != nil)
 
         let reopenedStore = NoteStore(baseURL: firstLaunchBase, manager: manager)
         precondition(!reopenedStore.isFirstLaunch)
-        precondition(reopenedStore.activeNotes.map(\.text) == ["Welcome to Deskbit"])
+        precondition(reopenedStore.activeNotes.map(\.text) == ["欢迎使用随便记"])
         let restoredGuide = RichTextCodec.decode(reopenedStore.activeNotes.first?.richTextData)
         let restoredFont = restoredGuide?.attribute(.font, at: 0, effectiveRange: nil) as? NSFont
         precondition(restoredFont.map { NSFontManager.shared.traits(of: $0).contains(.boldFontMask) } == true)

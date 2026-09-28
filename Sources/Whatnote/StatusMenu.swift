@@ -1,7 +1,7 @@
 import AppKit
 
 @MainActor
-@objc protocol DeskbitStatusMenuTarget: AnyObject {
+@objc protocol AppStatusMenuTarget: AnyObject {
     func newNoteFromMenu()
     func arrangeNotes()
     func showHistoryFromMenu()
@@ -11,31 +11,31 @@ import AppKit
 }
 
 @MainActor
-enum DeskbitStatusMenu {
-    static func make(target: DeskbitStatusMenuTarget) -> NSMenu {
+enum AppStatusMenu {
+    static func make(target: AppStatusMenuTarget) -> NSMenu {
         let menu = NSMenu()
         menu.addItem(item(
             "新建便签",
-            action: #selector(DeskbitStatusMenuTarget.newNoteFromMenu),
+            action: #selector(AppStatusMenuTarget.newNoteFromMenu),
             key: "n",
             symbol: "square.and.pencil",
             target: target
         ))
         menu.addItem(item(
             "自动排序便签",
-            action: #selector(DeskbitStatusMenuTarget.arrangeNotes),
+            action: #selector(AppStatusMenuTarget.arrangeNotes),
             symbol: "rectangle.3.group",
             target: target
         ))
         menu.addItem(item(
             "历史便签",
-            action: #selector(DeskbitStatusMenuTarget.showHistoryFromMenu),
+            action: #selector(AppStatusMenuTarget.showHistoryFromMenu),
             symbol: "clock.arrow.circlepath",
             target: target
         ))
         let showAll = item(
             "显示所有便签",
-            action: #selector(DeskbitStatusMenuTarget.showAllNotes),
+            action: #selector(AppStatusMenuTarget.showAllNotes),
             key: "0",
             symbol: "macwindow.on.rectangle",
             target: target
@@ -45,12 +45,12 @@ enum DeskbitStatusMenu {
         menu.addItem(.separator())
         menu.addItem(item(
             "偏好设置…",
-            action: #selector(DeskbitStatusMenuTarget.showPreferencesFromMenu),
+            action: #selector(AppStatusMenuTarget.showPreferencesFromMenu),
             key: ",",
             symbol: "gearshape",
             target: target
         ))
-        menu.addItem(item("退出 Deskbit", action: #selector(DeskbitStatusMenuTarget.quit), key: "q", target: target))
+        menu.addItem(item("退出随便记", action: #selector(AppStatusMenuTarget.quit), key: "q", target: target))
         return menu
     }
 
@@ -59,7 +59,7 @@ enum DeskbitStatusMenu {
         action: Selector,
         key: String = "",
         symbol: String? = nil,
-        target: DeskbitStatusMenuTarget
+        target: AppStatusMenuTarget
     ) -> NSMenuItem {
         let item = NSMenuItem(title: title, action: action, keyEquivalent: key)
         item.target = target

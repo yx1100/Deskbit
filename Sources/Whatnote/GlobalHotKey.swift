@@ -63,7 +63,7 @@ struct HotKeyShortcut: Equatable {
 }
 
 enum HotKeyPreferences {
-    static let newNoteKey = "DeskbitNewNoteHotKey"
+    static let newNoteKey = "NewNoteHotKey"
 
     /// Missing preference means the default shortcut; an empty dictionary means the user cleared it.
     static func newNoteShortcut(in defaults: UserDefaults = .standard) -> HotKeyShortcut? {

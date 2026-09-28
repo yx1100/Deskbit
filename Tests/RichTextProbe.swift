@@ -179,6 +179,20 @@ struct RichTextProbe {
         let todoMarkdownEditor = convertedEditor("- [ ] 买牛奶\n- [x] 已完成")
         let todoMarkdown = todoMarkdownEditor.string == "☐ 买牛奶\n☑ 已完成"
 
+        // Clicking a checkbox flips only that item between open and done.
+        let clickEditor = NSTextView()
+        clickEditor.isRichText = true
+        clickEditor.allowsUndo = true
+        clickEditor.string = "☐ 买牛奶\n☑ 已完成"
+        let firstChecked = RichTextFormatting.toggleTodoCompletion(atParagraphStart: 0, in: clickEditor)
+            && clickEditor.string == "☑ 买牛奶\n☑ 已完成"
+            && (clickEditor.textStorage?.attribute(.strikethroughStyle, at: 2, effectiveRange: nil) as? Int) == NSUnderlineStyle.single.rawValue
+        let secondUnchecked = RichTextFormatting.toggleTodoCompletion(atParagraphStart: 6, in: clickEditor)
+            && clickEditor.string == "☑ 买牛奶\n☐ 已完成"
+            && clickEditor.textStorage?.attribute(.strikethroughStyle, at: 8, effectiveRange: nil) == nil
+        let plainIgnored = !RichTextFormatting.toggleTodoCompletion(atParagraphStart: 2, in: clickEditor)
+        let checkboxClicks = firstChecked && secondUnchecked && plainIgnored
+
         let extendedMarkdown = strikeMarkdown && headingMarkdown && italicMarkdown && arithmeticUntouched
             && codeMarkdown && linkMarkdown && nonLinkUntouched && todoMarkdown
 
@@ -272,6 +286,6 @@ struct RichTextProbe {
         let orphanPrevented = !RichTextFormatting.adjustBulletLevel(in: orphanBulletEditor, delta: 1)
 
         print("bold=\(boldSurvived) legacyStrike=\(strikeSurvived) todo=\(todoPending && todoCompleted && todoRemoved && todoSurvived && todoSelectionPreserved && completedTodoNewline && splitCompletedTodo) bullet=\(bulletSurvived) futureBold=\(futureBoldOn && futureBoldOff) bulletToggle=\(bulletsOn && bulletsOff && bulletSelectionPreserved && bulletBecameTodo && todoBecameBullet) markdown=\(markdownChanged && markdownBold && markdownBullets && extendedMarkdown && trailingIsRegular) listExit=\(listExitClean) nesting=\(multiLevelOn && multiLevelOff && multiLevelSurvived && orphanPrevented && tieredMarkers && inheritedMarker && normalizedLegacyMarker) markerProportions=\(markerProportionsAreBalanced) bytes=\(data.count)")
-        guard boldSurvived, bulletSurvived, strikeSurvived, futureBoldOn, futureBoldOff, todoPending, todoCompleted, todoRemoved, todoSurvived, todoSelectionPreserved, completedTodoNewline, splitCompletedTodo, bulletsOn, bulletsOff, bulletSelectionPreserved, bulletBecameTodo, todoBecameBullet, markdownChanged, markdownBold, markdownBullets, extendedMarkdown, trailingIsRegular, listExitClean, multiLevelOn, multiLevelOff, multiLevelSurvived, orphanPrevented, tieredMarkers, inheritedMarker, normalizedLegacyMarker, markerProportionsAreBalanced else { exit(1) }
+        guard boldSurvived, bulletSurvived, strikeSurvived, futureBoldOn, futureBoldOff, todoPending, todoCompleted, todoRemoved, todoSurvived, todoSelectionPreserved, completedTodoNewline, splitCompletedTodo, bulletsOn, bulletsOff, bulletSelectionPreserved, bulletBecameTodo, todoBecameBullet, markdownChanged, markdownBold, markdownBullets, extendedMarkdown, checkboxClicks, trailingIsRegular, listExitClean, multiLevelOn, multiLevelOff, multiLevelSurvived, orphanPrevented, tieredMarkers, inheritedMarker, normalizedLegacyMarker, markerProportionsAreBalanced else { exit(1) }
     }
 }

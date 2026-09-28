@@ -3,11 +3,11 @@ set -euo pipefail
 
 project_dir="${0:A:h:h}"
 configuration="${1:-release}"
-app_dir="$project_dir/dist/Deskbit.app"
+app_dir="$project_dir/dist/Whatnote.app"
 contents_dir="$app_dir/Contents"
 marketing_version="${MARKETING_VERSION:-1.2.2}"
 build_number="${BUILD_NUMBER:-5}"
-bundle_identifier="${BUNDLE_IDENTIFIER:-com.local.deskbit}"
+bundle_identifier="${BUNDLE_IDENTIFIER:-com.yx1100.whatnote}"
 codesign_identity="${CODESIGN_IDENTITY:--}"
 
 if [[ ! "$marketing_version" =~ '^[0-9]+\.[0-9]+\.[0-9]+$' ]]; then
@@ -23,12 +23,12 @@ cd "$project_dir"
 rm -rf "$app_dir"
 mkdir -p "$contents_dir/MacOS" "$contents_dir/Resources"
 
-# Deskbit ships for Apple Silicon only.
+# Whatnote (随便记) ships for Apple Silicon only.
 swift build -c "$configuration" --arch arm64
-binary_path="$(swift build -c "$configuration" --arch arm64 --show-bin-path)/Deskbit"
-cp "$binary_path" "$contents_dir/MacOS/Deskbit"
+binary_path="$(swift build -c "$configuration" --arch arm64 --show-bin-path)/Whatnote"
+cp "$binary_path" "$contents_dir/MacOS/Whatnote"
 
-icon_work="$project_dir/.build/Deskbit.iconset"
+icon_work="$project_dir/.build/Whatnote.iconset"
 mkdir -p "$icon_work"
 swift "$project_dir/Tools/GenerateIcon.swift" "$icon_work/icon_512x512@2x.png"
 for spec in "16 16x16" "32 16x16@2x" "32 32x32" "64 32x32@2x" "128 128x128" "256 128x128@2x" "256 256x256" "512 256x256@2x" "512 512x512"; do
@@ -36,23 +36,30 @@ for spec in "16 16x16" "32 16x16@2x" "32 32x32" "64 32x32@2x" "128 128x128" "256
   filename="${spec#* }"
   sips -z "$pixels" "$pixels" "$icon_work/icon_512x512@2x.png" --out "$icon_work/icon_$filename.png" >/dev/null
 done
-iconutil -c icns "$icon_work" -o "$contents_dir/Resources/Deskbit.icns"
+iconutil -c icns "$icon_work" -o "$contents_dir/Resources/Whatnote.icns"
 
 plutil -create xml1 "$contents_dir/Info.plist"
-plutil -insert CFBundleDisplayName -string "Deskbit" "$contents_dir/Info.plist"
-plutil -insert CFBundleExecutable -string "Deskbit" "$contents_dir/Info.plist"
-plutil -insert CFBundleIconFile -string "Deskbit" "$contents_dir/Info.plist"
+plutil -insert CFBundleDisplayName -string "Whatnote" "$contents_dir/Info.plist"
+plutil -insert CFBundleExecutable -string "Whatnote" "$contents_dir/Info.plist"
+plutil -insert CFBundleIconFile -string "Whatnote" "$contents_dir/Info.plist"
 plutil -insert CFBundleIdentifier -string "$bundle_identifier" "$contents_dir/Info.plist"
 plutil -insert CFBundleInfoDictionaryVersion -string "6.0" "$contents_dir/Info.plist"
-plutil -insert CFBundleName -string "Deskbit" "$contents_dir/Info.plist"
+plutil -insert CFBundleName -string "Whatnote" "$contents_dir/Info.plist"
 plutil -insert CFBundlePackageType -string "APPL" "$contents_dir/Info.plist"
 plutil -insert CFBundleShortVersionString -string "$marketing_version" "$contents_dir/Info.plist"
 plutil -insert CFBundleVersion -string "$build_number" "$contents_dir/Info.plist"
-plutil -insert CFBundleDevelopmentRegion -string "zh_CN" "$contents_dir/Info.plist"
+plutil -insert CFBundleDevelopmentRegion -string "zh-Hans" "$contents_dir/Info.plist"
+plutil -insert LSHasLocalizedDisplayName -bool true "$contents_dir/Info.plist"
 plutil -insert LSMinimumSystemVersion -string "11.0" "$contents_dir/Info.plist"
 plutil -insert LSArchitecturePriority -json '["arm64"]' "$contents_dir/Info.plist"
 plutil -insert LSUIElement -bool true "$contents_dir/Info.plist"
 plutil -insert NSUserNotificationAlertStyle -string "alert" "$contents_dir/Info.plist"
+
+# Finder, Launchpad and Login Items show the Chinese name 随便记.
+localized_dir="$contents_dir/Resources/zh-Hans.lproj"
+mkdir -p "$localized_dir"
+print -r -- '"CFBundleDisplayName" = "随便记";
+"CFBundleName" = "随便记";' > "$localized_dir/InfoPlist.strings"
 
 codesign_options=(--force --sign "$codesign_identity")
 if [[ "$codesign_identity" != "-" ]]; then

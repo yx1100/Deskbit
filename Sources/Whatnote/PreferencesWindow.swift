@@ -127,7 +127,7 @@ final class PreferencesViewController: NSViewController {
     private let onRecordingChanged: (Bool) -> Void
     private let recorder: HotKeyRecorderView
     private let statusLabel = NSTextField(wrappingLabelWithString: "")
-    private let launchCheckbox = NSButton(checkboxWithTitle: "登录 Mac 时自动启动 Deskbit", target: nil, action: nil)
+    private let launchCheckbox = NSButton(checkboxWithTitle: "登录 Mac 时自动启动随便记", target: nil, action: nil)
     private let launchHint = NSTextField(wrappingLabelWithString: "")
     private let openLoginItemsButton = NSButton(title: "打开系统设置…", target: nil, action: nil)
 
@@ -246,12 +246,12 @@ final class PreferencesViewController: NSViewController {
         case .unsupported:
             hint = "开机自启动需要 macOS 13 或更高版本。"
         case .requiresApproval:
-            hint = "还需要在“系统设置 → 通用 → 登录项”中允许 Deskbit。"
+            hint = "还需要在“系统设置 → 通用 → 登录项”中允许随便记。"
         case .enabled, .disabled:
             hint = "也可以在“系统设置 → 通用 → 登录项”中管理。"
         }
         if state != .unsupported, !LaunchAtLogin.isInApplicationsFolder {
-            hint += "建议先把 Deskbit 拖到“应用程序”文件夹再开启，否则移动或重新构建后自启动可能失效。"
+            hint += "建议先把随便记拖到“应用程序”文件夹再开启，否则移动或重新构建后自启动可能失效。"
         }
         if let error {
             hint = "设置失败：\(error)"

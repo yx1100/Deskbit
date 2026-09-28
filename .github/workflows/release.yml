@@ -14,7 +14,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: deskbit-release
+  group: whatnote-release
   cancel-in-progress: false
 
 jobs:
@@ -53,8 +53,8 @@ jobs:
           ./scripts/build-app.sh release
           for test_script in scripts/test-*.sh; do "$test_script"; done
           swift build
-          lipo -archs dist/Deskbit.app/Contents/MacOS/Deskbit | grep -qx arm64
-          codesign --verify --deep --strict dist/Deskbit.app
+          lipo -archs dist/Whatnote.app/Contents/MacOS/Whatnote | grep -qx arm64
+          codesign --verify --deep --strict dist/Whatnote.app
 
       - name: Package release artifacts
         env:
@@ -62,20 +62,20 @@ jobs:
         run: |
           ./scripts/make-dmg.sh "$VERSION"
           ditto -c -k --sequesterRsrc --keepParent \
-            dist/Deskbit.app \
-            "dist/Deskbit-v${VERSION}-macOS-arm64.zip"
+            dist/Whatnote.app \
+            "dist/Whatnote-v${VERSION}-macOS-arm64.zip"
 
       - name: Update Homebrew Cask
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          ZIP="dist/Deskbit-v${VERSION}-macOS-arm64.zip"
+          ZIP="dist/Whatnote-v${VERSION}-macOS-arm64.zip"
           SHA="$(shasum -a 256 "$ZIP" | awk '{print $1}')"
           sed -i '' -E \
             -e "s/^  version \"[^\"]+\"/  version \"${VERSION}\"/" \
             -e "s/^  sha256 \"[0-9a-f]+\"/  sha256 \"${SHA}\"/" \
-            Casks/deskbit.rb
-          ruby -c Casks/deskbit.rb
+            Casks/whatnote.rb
+          ruby -c Casks/whatnote.rb
 
       - name: Publish GitHub release
         env:
@@ -84,15 +84,15 @@ jobs:
           TAG: ${{ steps.version.outputs.tag }}
         run: |
           ASSETS=(
-            "dist/Deskbit-v${VERSION}-macOS-arm64.dmg"
-            "dist/Deskbit-v${VERSION}-macOS-arm64.zip"
+            "dist/Whatnote-v${VERSION}-macOS-arm64.dmg"
+            "dist/Whatnote-v${VERSION}-macOS-arm64.zip"
           )
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "${ASSETS[@]}" --clobber
           else
             gh release create "$TAG" "${ASSETS[@]}" \
               --target "$GITHUB_SHA" \
-              --title "Deskbit ${VERSION}" \
+              --title "随便记 Whatnote ${VERSION}" \
               --generate-notes
           fi
 
@@ -101,13 +101,13 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           METADATA_DIR="$(mktemp -d)"
-          cp Casks/deskbit.rb "$METADATA_DIR/deskbit.rb"
+          cp Casks/whatnote.rb "$METADATA_DIR/whatnote.rb"
           git fetch origin main
           git checkout -B main origin/main
-          cp "$METADATA_DIR/deskbit.rb" Casks/deskbit.rb
+          cp "$METADATA_DIR/whatnote.rb" Casks/whatnote.rb
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add Casks/deskbit.rb
+          git add Casks/whatnote.rb
           if git diff --cached --quiet; then
             exit 0
           fi

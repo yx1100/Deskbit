@@ -79,6 +79,28 @@ enum RichTextFormatting {
         setTypingTodoCompletion(todoState(in: textView) == .completed, textView: textView)
     }
 
+    /// Checks or unchecks the to-do item whose marker is at `start`; used by clicks on the checkbox.
+    /// Unlike `toggleTodo`, it never turns the line back into plain text.
+    @discardableResult
+    static func toggleTodoCompletion(atParagraphStart start: Int, in textView: NSTextView) -> Bool {
+        guard let storage = textView.textStorage else { return false }
+        let state = todoState(in: storage.string, at: start)
+        guard state != .plain else { return false }
+        let paragraph = (storage.string as NSString).paragraphRange(for: NSRange(location: start, length: 0))
+        // Registering the whole paragraph lets undo restore both the marker and the strikethrough.
+        guard textView.shouldChangeText(in: paragraph, replacementString: nil) else { return false }
+        let completed = state == .pending
+        storage.beginEditing()
+        storage.replaceCharacters(
+            in: NSRange(location: start, length: 1),
+            with: completed ? completedTodoMarker : pendingTodoMarker
+        )
+        applyTodoCompletion(completed, storage: storage, paragraphStart: start)
+        storage.endEditing()
+        textView.didChangeText()
+        return true
+    }
+
     static func toggleBulletList(in textView: NSTextView) {
         guard let storage = textView.textStorage else { return }
         let selected = textView.selectedRange()

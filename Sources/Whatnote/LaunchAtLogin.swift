@@ -1,7 +1,7 @@
 import Foundation
 import ServiceManagement
 
-/// Registers Deskbit itself as a login item (System Settings → General → Login Items).
+/// Registers the app itself as a login item (System Settings → General → Login Items).
 enum LaunchAtLogin {
     enum State: Equatable {
         case enabled
