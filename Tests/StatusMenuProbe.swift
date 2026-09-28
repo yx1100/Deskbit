@@ -1,13 +1,12 @@
 import AppKit
 
 @MainActor
-private final class MenuTarget: NSObject, DeskbitStatusMenuTarget {
+private final class MenuTarget: NSObject, AppStatusMenuTarget {
     @objc func newNoteFromMenu() {}
     @objc func arrangeNotes() {}
     @objc func showHistoryFromMenu() {}
     @objc func showAllNotes() {}
-    @objc func showFeedbackFromMenu() {}
-    @objc func changeLanguage(_ sender: NSMenuItem) {}
+    @objc func showPreferencesFromMenu() {}
     @objc func quit() {}
 }
 
@@ -17,8 +16,7 @@ struct StatusMenuProbe {
     static func main() {
         _ = NSApplication.shared
         let target = MenuTarget()
-        let hidden = NSMenuItem(title: "显示隐藏的便签", action: nil, keyEquivalent: "")
-        let menu = DeskbitStatusMenu.make(target: target, hiddenMenu: hidden)
+        let menu = AppStatusMenu.make(target: target)
         let titles = menu.items.filter { !$0.isSeparatorItem }.map(\.title)
 
         guard titles == [
@@ -26,14 +24,15 @@ struct StatusMenuProbe {
             "自动排序便签",
             "历史便签",
             "显示所有便签",
-            "显示隐藏的便签",
-            "用户反馈",
-            "语言",
-            "退出 Deskbit"
+            "偏好设置…",
+            "退出随便记"
         ],
         !titles.contains("编辑"),
-        menu.items.first(where: { $0.title == "用户反馈" })?.action == #selector(MenuTarget.showFeedbackFromMenu),
-        menu.items.first(where: { $0.title == "用户反馈" })?.image != nil else { exit(1) }
+        menu.items
+            .filter({ !$0.isSeparatorItem && $0.title != "退出随便记" })
+            .allSatisfy({ $0.image != nil }),
+        menu.items.first(where: { $0.title == "偏好设置…" })?.action == #selector(MenuTarget.showPreferencesFromMenu),
+        menu.items.first(where: { $0.title == "偏好设置…" })?.image != nil else { exit(1) }
 
         guard menu.items
             .filter({ !$0.isSeparatorItem && $0.submenu == nil && $0.action != nil })

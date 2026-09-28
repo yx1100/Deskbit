@@ -2,17 +2,15 @@
 import PackageDescription
 
 let package = Package(
-    name: "Deskbit",
-    defaultLocalization: "en",
+    name: "Whatnote",
     platforms: [.macOS(.v11)],
     products: [
-        .executable(name: "Deskbit", targets: ["Deskbit"])
+        .executable(name: "Whatnote", targets: ["Whatnote"])
     ],
     targets: [
         .executableTarget(
-            name: "Deskbit",
-            path: "Sources/Deskbit",
-            resources: [.process("Resources")]
+            name: "Whatnote",
+            path: "Sources/Whatnote"
         )
     ]
 )

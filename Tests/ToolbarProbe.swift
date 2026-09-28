@@ -10,51 +10,81 @@ struct ToolbarProbe {
         toolbar.delegate = delegate
         guard toolbar.acceptsFirstMouse(for: nil) else { exit(11) }
 
-        guard let stack = toolbar.subviews.compactMap({ $0 as? NSStackView }).first else { exit(1) }
-        let labels = stack.arrangedSubviews.compactMap { ($0 as? NSButton)?.accessibilityLabel() }
-        let expected = ["自动排序便签", "黄色", "蓝色", "绿色", "粉色", "新建便签", "置顶", "完成"]
+        let buttons = descendants(of: toolbar).compactMap { $0 as? NSButton }
+        let labels = buttons.compactMap { $0.accessibilityLabel() }
+        let expected = ["自动排序便签", "蓝色", "绿色", "黄色", "粉色", "新建便签", "置顶", "完成"]
         guard labels == expected else { exit(2) }
+        guard descendants(of: toolbar).filter({ $0 is GlassCapsuleView }).count == 3 else { exit(1) }
 
-        let colorButtons = stack.arrangedSubviews.compactMap { $0 as? ColorDotButton }
-        guard colorButtons.count == 4,
-              colorButtons.allSatisfy({ $0.intrinsicContentSize.width == 18 }) else { exit(3) }
+        let colorButtons = buttons.compactMap { $0 as? ColorDotButton }
+        guard colorButtons.map(\.noteColor) == NoteColor.allCases else { exit(3) }
         guard let selectedColor = colorButtons.first(where: { $0.selectedColor }),
-              selectedColor.outlineWidth == 0,
-              selectedColor.dotDiameter == 14,
-              selectedColor.haloDiameter == 18,
+              selectedColor.noteColor == .yellow,
+              colorButtons.filter({ $0.selectedColor }).count == 1,
               colorButtons.filter({ !$0.selectedColor }).allSatisfy({
-                  $0.outlineWidth == 0.5 && $0.dotDiameter == 12 && $0.haloDiameter == 0
+                  $0.dotDiameter < selectedColor.dotDiameter && $0.ringWidth < selectedColor.ringWidth
               }) else { exit(4) }
 
-        guard let arrange = stack.arrangedSubviews
-            .compactMap({ $0 as? NSButton })
-            .first(where: { $0.accessibilityLabel() == "自动排序便签" }) else { exit(5) }
+        guard let arrange = buttons.first(where: { $0.accessibilityLabel() == "自动排序便签" }) else { exit(5) }
         arrange.performClick(nil)
         guard delegate.arrangeCount == 1 else { exit(6) }
         guard !labels.contains("历史便签") else { exit(12) }
 
-        toolbar.frame = NSRect(x: 0, y: 0, width: 300, height: 40)
+        toolbar.update(color: .pink, isPinned: true)
+        guard let pin = buttons.first(where: { $0.accessibilityLabel() == "取消置顶" }) as? NoteToolButton,
+              pin.isActive,
+              colorButtons.first(where: { $0.selectedColor })?.noteColor == .pink else { exit(14) }
+
+        // Empty space between the capsules is the drag handle.
+        toolbar.frame = NSRect(x: 0, y: 0, width: 300, height: NoteAppearance.topBarHeight)
         toolbar.layoutSubtreeIfNeeded()
-        guard let spacer = stack.arrangedSubviews.first(where: { !($0 is NSControl) }) else { exit(7) }
-        let spacerCenter = toolbar.convert(NSPoint(x: spacer.bounds.midX, y: spacer.bounds.midY), from: spacer)
-        guard toolbar.hitTest(spacerCenter) === toolbar else { exit(8) }
+        guard toolbar.hitTest(NSPoint(x: 70, y: NoteAppearance.topBarHeight / 2)) === toolbar else { exit(8) }
 
         let root = StickyRootView(note: .fresh())
         guard root.textView.font?.pointSize == NoteAppearance.bodyFontSize else { exit(9) }
+        guard root.textView.layoutManager is NoteLayoutManager else { exit(17) }
+        guard !descendants(of: root).contains(where: { ($0 as? NSTextField)?.stringValue.contains("保存") == true }) else { exit(15) }
 
         let footer = StickyFormattingFooterView()
         footer.delegate = delegate
-        guard let formattingStack = footer.subviews.compactMap({ $0 as? NSStackView }).first else { exit(10) }
-        let formattingButtons = formattingStack.arrangedSubviews.compactMap { $0 as? NSButton }
+        let formattingButtons = descendants(of: footer).compactMap { $0 as? NoteToolButton }
         guard formattingButtons.compactMap({ $0.accessibilityLabel() }) == [
             "加粗（⌘B）",
             "项目符号（⌘⇧8；Tab / Shift+Tab 调整级别）",
-            "待办事项（⌘⇧X）"
+            "编号列表（⌘⇧7）",
+            "待办事项（⌘⇧X）",
+            "插入图片（也可直接粘贴或拖入）"
         ] else { exit(13) }
         formattingButtons[2].performClick(nil)
-        guard delegate.todoCount == 1 else { exit(14) }
+        formattingButtons[3].performClick(nil)
+        guard delegate.orderedCount == 1, delegate.todoCount == 1 else { exit(10) }
+        footer.updateFormatting(isBold: true, isBulletList: false, isOrderedList: true, isTodoItem: false)
+        guard formattingButtons.map(\.isActive) == [true, false, true, false, false] else { exit(16) }
+
+        // To-do markers are drawn as circles and toggle when clicked.
+        var todoNote = StickyNote.fresh()
+        todoNote.text = "☐ 买牛奶\n普通一行"
+        let todoRoot = StickyRootView(note: todoNote)
+        let textView = todoRoot.textView
+        textView.frame = NSRect(origin: .zero, size: NoteAppearance.defaultSize)
+        guard let layoutManager = textView.layoutManager, let container = textView.textContainer else { exit(18) }
+        layoutManager.ensureLayout(for: container)
+        let origin = textView.textContainerOrigin
+        let checkbox = TodoCheckbox.rect(forGlyphAt: 0, layoutManager: layoutManager)
+        guard textView.todoMarkerIndex(at: NSPoint(x: checkbox.midX + origin.x, y: checkbox.midY + origin.y)) == 0 else { exit(19) }
+        let plainGlyph = layoutManager.glyphIndexForCharacter(at: 6)
+        let plainRect = layoutManager.boundingRect(forGlyphRange: NSRange(location: plainGlyph, length: 1), in: container)
+        guard textView.todoMarkerIndex(at: NSPoint(x: plainRect.midX + origin.x, y: plainRect.midY + origin.y)) == nil else { exit(20) }
+        if let bitmap = textView.bitmapImageRepForCachingDisplay(in: textView.bounds) {
+            textView.cacheDisplay(in: textView.bounds, to: bitmap)
+        }
 
         print("toolbar layout: pass")
+    }
+
+    @MainActor
+    private static func descendants(of root: NSView) -> [NSView] {
+        root.subviews.flatMap { [$0] + descendants(of: $0) }
     }
 }
 
@@ -62,13 +92,17 @@ struct ToolbarProbe {
 private final class ToolbarDelegateProbe: StickyToolbarDelegate {
     var arrangeCount = 0
     var todoCount = 0
+    var orderedCount = 0
 
     func didChooseColor(_ color: NoteColor) {}
     func didTapArrange() { arrangeCount += 1 }
     func didBeginToolbarDrag(with event: NSEvent) {}
     func didTapBold() {}
     func didTapBulletList() {}
+    func didTapOrderedList() { orderedCount += 1 }
     func didTapTodo() { todoCount += 1 }
+    func didTapLink() {}
+    func didTapImage() {}
     func didTapNew() {}
     func didTapPin() {}
     func didTapComplete() {}

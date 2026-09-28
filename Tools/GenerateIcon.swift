@@ -17,8 +17,8 @@ gradient.draw(in: tile, angle: -65)
 context.setShadow(offset: .zero, blur: 0, color: nil)
 
 let notes: [(NSRect, NSColor, CGFloat)] = [
-    (NSRect(x: 220, y: 468, width: 390, height: 310), NSColor(red: 1.00, green: 0.89, blue: 0.43, alpha: 1), -8),
-    (NSRect(x: 414, y: 260, width: 390, height: 310), NSColor(red: 0.68, green: 0.90, blue: 0.80, alpha: 1), 7)
+    (NSRect(x: 220, y: 468, width: 390, height: 310), NSColor(srgbRed: 0xF1 / 255, green: 0xD5 / 255, blue: 0x46 / 255, alpha: 1), -8),
+    (NSRect(x: 414, y: 260, width: 390, height: 310), NSColor(srgbRed: 0xFF / 255, green: 0x80 / 255, blue: 0x77 / 255, alpha: 1), 7)
 ]
 
 for (rect, color, angle) in notes {

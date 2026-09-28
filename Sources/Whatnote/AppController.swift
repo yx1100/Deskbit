@@ -2,15 +2,15 @@ import AppKit
 import UserNotifications
 
 @MainActor
-final class AppController: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate, NSPopoverDelegate, DeskbitStatusMenuTarget {
+final class AppController: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate, NSPopoverDelegate, AppStatusMenuTarget {
     private var controllers: [UUID: StickyWindowController] = [:]
     private var statusItem: NSStatusItem!
-    private let hiddenMenu = NSMenuItem(title: L10n.text("menu.showHidden"), action: nil, keyEquivalent: "")
     private var selectedNoteIDs: Set<UUID> = []
     private var selectionOverlay: SelectionOverlayWindowController?
     private var historyPopover: NSPopover?
     private var historyDismissalMonitor: HistoryPopoverDismissalMonitor?
-    private var feedbackWindowController: NSWindowController?
+    private var preferencesWindowController: NSWindowController?
+    private lazy var newNoteHotKey = GlobalHotKey { [weak self] in self?.createNote() }
     private var desktopMouseMonitor: Any?
     private var localMouseMonitor: Any?
     private var desktopSelectionStart: NSPoint?
@@ -27,6 +27,7 @@ final class AppController: NSObject, NSApplicationDelegate, UNUserNotificationCe
         configureMainMenu()
         configureStatusItem()
         installDesktopSelectionMonitor()
+        newNoteHotKey.register(HotKeyPreferences.newNoteShortcut())
 
         let store = NoteStore.shared
         let notes = store.activeNotes
@@ -41,7 +42,6 @@ final class AppController: NSObject, NSApplicationDelegate, UNUserNotificationCe
             notes.forEach { open($0) }
             if !notes.contains(where: { !$0.isHidden }) { showAllNotes() }
         }
-        refreshMenu()
     }
 
     func createNote(near sourceFrame: NSRect? = nil, in visibleFrame: NSRect? = nil) {
@@ -52,7 +52,6 @@ final class AppController: NSObject, NSApplicationDelegate, UNUserNotificationCe
             }
         }
         open(NoteStore.shared.add(frame: frame), focus: true)
-        refreshMenu()
     }
 
     func completeNote(id: UUID) {
@@ -62,31 +61,12 @@ final class AppController: NSObject, NSApplicationDelegate, UNUserNotificationCe
         selectedNoteIDs.remove(id)
         NoteStore.shared.complete(id: id)
         dismissHistoryPopover()
-        refreshMenu()
-    }
-
-    func refreshMenu() {
-        let hidden = NoteStore.shared.activeNotes.filter(\.isHidden)
-        hiddenMenu.submenu = nil
-        hiddenMenu.isEnabled = !hidden.isEmpty
-        guard !hidden.isEmpty else { return }
-
-        let submenu = NSMenu()
-        for note in hidden {
-            let title = note.text.split(separator: "\n").first.map(String.init)?.prefix(28) ?? L10n.text("note.untitled").prefix(28)
-            let item = NSMenuItem(title: String(title), action: #selector(showHiddenNote(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = note.id.uuidString
-            submenu.addItem(item)
-        }
-        hiddenMenu.submenu = submenu
     }
 
     func show(noteID: UUID) {
         guard let note = NoteStore.shared.note(id: noteID), note.completedAt == nil else { return }
         if controllers[noteID] == nil { open(note) }
         controllers[noteID]?.showAndFocus()
-        refreshMenu()
     }
 
     private func open(_ note: StickyNote, focus: Bool = false) {
@@ -99,38 +79,21 @@ final class AppController: NSObject, NSApplicationDelegate, UNUserNotificationCe
     }
 
     private func configureStatusItem() {
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         statusItem.isVisible = true
-        statusItem.button?.image = NSImage(systemSymbolName: "note.text", accessibilityDescription: "Deskbit")
-        statusItem.button?.imagePosition = .imageLeading
-        statusItem.button?.title = L10n.text("menu.statusTitle")
-        statusItem.button?.toolTip = "Deskbit"
-        statusItem.menu = DeskbitStatusMenu.make(target: self, hiddenMenu: hiddenMenu)
+        // Match the visual weight of the system's menu bar icons.
+        let symbol = NSImage(systemSymbolName: "note.text", accessibilityDescription: "随便记")?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 18, weight: .regular))
+        symbol?.isTemplate = true
+        statusItem.button?.image = symbol
+        statusItem.button?.imagePosition = .imageOnly
+        statusItem.button?.title = ""
+        statusItem.button?.toolTip = "随便记"
+        statusItem.menu = AppStatusMenu.make(target: self)
     }
 
     private func configureMainMenu() {
         NSApp.mainMenu = ApplicationMenu.make()
-    }
-
-    @objc func changeLanguage(_ sender: NSMenuItem) {
-        guard let identifier = sender.representedObject as? String,
-              let language = AppLanguage(rawValue: identifier) else { return }
-        L10n.preference = language
-        // Finish tracking the menu before replacing it.
-        DispatchQueue.main.async { [weak self] in self?.refreshLocalization() }
-    }
-
-    private func refreshLocalization() {
-        configureMainMenu()
-        hiddenMenu.title = L10n.text("menu.showHidden")
-        statusItem.button?.title = L10n.text("menu.statusTitle")
-        statusItem.menu?.removeItem(hiddenMenu)
-        statusItem.menu = DeskbitStatusMenu.make(target: self, hiddenMenu: hiddenMenu)
-        refreshMenu()
-        controllers.values.forEach { $0.refreshLocalization() }
-        dismissHistoryPopover()
-        feedbackWindowController?.window?.title = L10n.text("menu.feedback")
-        (feedbackWindowController?.contentViewController as? FeedbackViewController)?.refreshLocalization()
     }
 
     @objc func newNoteFromMenu() { createNote() }
@@ -175,7 +138,6 @@ final class AppController: NSObject, NSApplicationDelegate, UNUserNotificationCe
                 self.dismissHistoryPopover()
                 guard let note = NoteStore.shared.restore(id: id) else { return }
                 self.open(note, focus: true)
-                self.refreshMenu()
             },
             onDelete: { [weak self] id in
                 self?.confirmDeleteHistoryNote(id: id)
@@ -216,48 +178,67 @@ final class AppController: NSObject, NSApplicationDelegate, UNUserNotificationCe
         }
     }
 
-    @objc func showFeedbackFromMenu() {
+    @objc func showPreferencesFromMenu() {
         let windowController: NSWindowController
-        let feedbackViewController: FeedbackViewController
-        if let existing = feedbackWindowController,
-           let existingViewController = existing.contentViewController as? FeedbackViewController {
+        if let existing = preferencesWindowController {
             windowController = existing
-            feedbackViewController = existingViewController
+            (existing.contentViewController as? PreferencesViewController)?
+                .update(shortcut: HotKeyPreferences.newNoteShortcut())
         } else {
-            feedbackViewController = FeedbackViewController { message, completion in
-                FeedbackSubmission.submit(message: message, completion: completion)
-            }
+            let viewController = PreferencesViewController(
+                shortcut: HotKeyPreferences.newNoteShortcut(),
+                applyShortcut: { [weak self] shortcut in
+                    self?.applyNewNoteShortcut(shortcut) ?? false
+                },
+                onRecordingChanged: { [weak self] isRecording in
+                    guard let self else { return }
+                    // Release the current shortcut while recording so its key press reaches the recorder.
+                    if isRecording {
+                        self.newNoteHotKey.unregister()
+                    } else {
+                        self.newNoteHotKey.register(HotKeyPreferences.newNoteShortcut())
+                    }
+                }
+            )
             let panel = NSPanel(
-                contentRect: NSRect(x: 0, y: 0, width: 460, height: 410),
+                contentRect: NSRect(x: 0, y: 0, width: 440, height: 290),
                 styleMask: [.titled, .closable],
                 backing: .buffered,
                 defer: false
             )
-            panel.title = L10n.text("menu.feedback")
+            panel.title = "偏好设置"
             panel.isReleasedWhenClosed = false
             panel.isFloatingPanel = false
             panel.level = .normal
-            panel.contentViewController = feedbackViewController
+            panel.contentViewController = viewController
             panel.center()
             windowController = NSWindowController(window: panel)
-            feedbackWindowController = windowController
+            preferencesWindowController = windowController
         }
 
         NSApp.activate(ignoringOtherApps: true)
         windowController.showWindow(nil)
         windowController.window?.makeKeyAndOrderFront(nil)
-        DispatchQueue.main.async { feedbackViewController.focusEditor() }
+    }
+
+    private func applyNewNoteShortcut(_ shortcut: HotKeyShortcut?) -> Bool {
+        guard newNoteHotKey.register(shortcut) else {
+            newNoteHotKey.register(HotKeyPreferences.newNoteShortcut())
+            return false
+        }
+        HotKeyPreferences.setNewNoteShortcut(shortcut)
+        return true
     }
 
     private func confirmDeleteHistoryNote(id: UUID) {
         dismissHistoryPopover()
         NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
-        alert.messageText = L10n.text("history.deleteConfirm")
-        alert.informativeText = L10n.text("common.irreversible")
+        alert.messageText = "永久删除这条历史便签？"
+        alert.informativeText = "这项操作无法撤销。"
         alert.alertStyle = .warning
-        alert.addButton(withTitle: L10n.text("common.delete"))
-        alert.addButton(withTitle: L10n.text("common.cancel"))
+        alert.addButton(withTitle: "删除")
+        alert.addButton(withTitle: "取消")
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         _ = NoteStore.shared.permanentlyDelete(id: id)
     }
@@ -266,11 +247,11 @@ final class AppController: NSObject, NSApplicationDelegate, UNUserNotificationCe
         dismissHistoryPopover()
         NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
-        alert.messageText = L10n.text("history.clearConfirm")
-        alert.informativeText = L10n.text("common.irreversible")
+        alert.messageText = "清空所有历史便签？"
+        alert.informativeText = "这项操作无法撤销。"
         alert.alertStyle = .warning
-        alert.addButton(withTitle: L10n.text("common.clear"))
-        alert.addButton(withTitle: L10n.text("common.cancel"))
+        alert.addButton(withTitle: "清空")
+        alert.addButton(withTitle: "取消")
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         NoteStore.shared.clearCompleted()
     }
@@ -450,15 +431,14 @@ final class AppController: NSObject, NSApplicationDelegate, UNUserNotificationCe
         selectionOverlay = nil
     }
 
+    /// Gathers every note onto the current desktop, including notes left on
+    /// other desktops (Spaces) or on a display that is no longer connected.
     @objc func showAllNotes() {
+        NSApp.activate(ignoringOtherApps: true)
         for note in NoteStore.shared.activeNotes {
-            show(noteID: note.id)
+            if controllers[note.id] == nil { open(note) }
+            controllers[note.id]?.gatherToCurrentDesktop()
         }
-    }
-
-    @objc private func showHiddenNote(_ sender: NSMenuItem) {
-        guard let value = sender.representedObject as? String, let id = UUID(uuidString: value) else { return }
-        show(noteID: id)
     }
 
     @objc func quit() { NSApp.terminate(nil) }

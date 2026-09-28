@@ -36,6 +36,17 @@ struct HistoryProbe {
         NoteHistory.clearCompleted(in: &notes)
         precondition(notes.isEmpty)
 
+        var blank = StickyNote.fresh(index: 2)
+        blank.text = "  \n• \n☐ "
+        var withImage = StickyNote.fresh(index: 3)
+        withImage.text = "\u{FFFC}"
+        notes = [blank, withImage]
+        precondition(NoteHistory.isBlank(blank) && !NoteHistory.isBlank(withImage))
+        precondition(NoteHistory.complete(id: blank.id, in: &notes))
+        precondition(!notes.contains(where: { $0.id == blank.id }))
+        precondition(NoteHistory.complete(id: withImage.id, in: &notes))
+        precondition(NoteHistory.completedNotes(in: notes).map(\.id) == [withImage.id])
+
         print("history lifecycle: pass")
     }
 }

@@ -5,7 +5,6 @@ final class StickyWindowController: NSWindowController, NSWindowDelegate, NSText
     private var note: StickyNote
     private let rootView: StickyRootView
     private let windowResidency: StickyWindowResidency
-    private var saveStatusTimer: Timer?
     private var isApplyingMarkdown = false
     weak var appController: AppController?
     var isPinned: Bool { note.isPinned }
@@ -28,7 +27,10 @@ final class StickyWindowController: NSWindowController, NSWindowDelegate, NSText
         rootView.textView.delegate = self
         rootView.textView.onToggleBold = { [weak self] in self?.didTapBold() }
         rootView.textView.onToggleBulletList = { [weak self] in self?.didTapBulletList() }
+        rootView.textView.onToggleOrderedList = { [weak self] in self?.didTapOrderedList() }
         rootView.textView.onToggleTodo = { [weak self] in self?.didTapTodo() }
+        rootView.textView.onEditLink = { [weak self] in self?.didTapLink() }
+        rootView.textView.onToggleTodoMarker = { [weak self] index in self?.toggleTodoMarker(at: index) }
         rootView.textView.onStructuredNewline = { [weak self] in
             guard let self else { return false }
             return RichTextFormatting.handleStructuredNewline(in: self.rootView.textView)
@@ -39,7 +41,13 @@ final class StickyWindowController: NSWindowController, NSWindowDelegate, NSText
             if changed { self.rootView.textView.didChangeText() }
             return changed
         }
-        if RichTextFormatting.normalizeBulletMarkers(in: rootView.textView) {
+        rootView.textView.onDeleteBackward = { [weak self] in
+            guard let self else { return false }
+            return RichTextFormatting.handleMarkerBackspace(in: self.rootView.textView)
+        }
+        let repairedBullets = RichTextFormatting.normalizeBulletMarkers(in: rootView.textView)
+        let repairedTodos = RichTextFormatting.normalizeTodoMarkers(in: rootView.textView)
+        if repairedBullets || repairedTodos {
             self.note.text = rootView.textView.string
             self.note.richTextData = rootView.textView.textStorage.flatMap(RichTextCodec.encode)
             NoteStore.shared.update(self.note)
@@ -61,6 +69,28 @@ final class StickyWindowController: NSWindowController, NSWindowDelegate, NSText
         NSApp.activate(ignoringOtherApps: true)
         window?.makeKey()
         window?.makeFirstResponder(rootView.textView)
+    }
+
+    /// Brings the note onto the current desktop (Space) and back on screen.
+    func gatherToCurrentDesktop() {
+        guard let window else { return }
+        note.isHidden = false
+        if !NSScreen.screens.contains(where: { $0.visibleFrame.intersects(window.frame) }),
+           let visible = (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame {
+            let size = window.frame.size
+            window.setFrameOrigin(NSPoint(x: visible.midX - size.width / 2, y: visible.midY - size.height / 2))
+        }
+        if note.isPinned {
+            // Pinned notes already appear on every desktop.
+            window.makeKeyAndOrderFront(nil)
+        } else {
+            let behavior = window.collectionBehavior
+            window.collectionBehavior = behavior.union(.moveToActiveSpace)
+            window.makeKeyAndOrderFront(nil)
+            DispatchQueue.main.async { [weak window] in window?.collectionBehavior = behavior }
+        }
+        note.frame = WindowFrame(window.frame)
+        NoteStore.shared.update(note)
     }
 
     func windowDidMove(_ notification: Notification) {
@@ -118,11 +148,30 @@ final class StickyWindowController: NSWindowController, NSWindowDelegate, NSText
         window?.makeFirstResponder(textView)
     }
 
+    func didTapOrderedList() {
+        let textView = rootView.textView
+        RichTextFormatting.toggleOrderedList(in: textView)
+        textView.didChangeText()
+        window?.makeFirstResponder(textView)
+    }
+
     func didTapTodo() {
         let textView = rootView.textView
         RichTextFormatting.toggleTodo(in: textView)
         textView.didChangeText()
         window?.makeFirstResponder(textView)
+    }
+
+    func didTapLink() {
+        let textView = rootView.textView
+        window?.makeFirstResponder(textView)
+        NoteLinks.editLink(in: textView)
+    }
+
+    func didTapImage() {
+        let textView = rootView.textView
+        window?.makeFirstResponder(textView)
+        NoteImages.chooseImages(into: textView)
     }
 
     func didTapNew() {
@@ -189,7 +238,6 @@ final class StickyWindowController: NSWindowController, NSWindowDelegate, NSText
             StickyWindowPresentation.apply(isPinned: note.isPinned, to: window)
         }
         rootView.toolbar.update(color: note.color, isPinned: note.isPinned)
-        rootView.statusLabel.stringValue = note.isPinned ? L10n.text("note.pinnedSaved") : L10n.text("note.saved")
         if isBecomingPinned {
             window?.orderFrontRegardless()
             if focusWhenPinned {
@@ -221,7 +269,6 @@ final class StickyWindowController: NSWindowController, NSWindowDelegate, NSText
         } else {
             StickyWindowPresentation.apply(isPinned: false, to: window)
             rootView.toolbar.update(color: note.color, isPinned: false)
-            rootView.statusLabel.stringValue = L10n.text("note.saved")
         }
         move(to: frame)
         self.window?.orderBack(nil)
@@ -247,15 +294,14 @@ final class StickyWindowController: NSWindowController, NSWindowDelegate, NSText
             note.richTextData = RichTextCodec.encode(storage)
         }
         NoteStore.shared.update(note)
-        rootView.statusLabel.stringValue = L10n.text("note.saving")
-        saveStatusTimer?.invalidate()
-        saveStatusTimer = Timer.scheduledTimer(
-            timeInterval: 0.45,
-            target: self,
-            selector: #selector(markSaved),
-            userInfo: nil,
-            repeats: false
-        )
+    }
+
+    /// A click on a to-do circle checks or unchecks that item.
+    private func toggleTodoMarker(at index: Int) {
+        let textView = rootView.textView
+        guard RichTextFormatting.toggleTodoCompletion(atParagraphStart: index, in: textView) else { return }
+        window?.makeFirstResponder(textView)
+        updateFormattingState()
     }
 
     private func updateFormattingState() {
@@ -263,23 +309,9 @@ final class StickyWindowController: NSWindowController, NSWindowDelegate, NSText
         rootView.footer.updateFormatting(
             isBold: RichTextFormatting.isBold(in: textView),
             isBulletList: RichTextFormatting.isBulletList(in: textView),
+            isOrderedList: RichTextFormatting.isOrderedList(in: textView),
             isTodoItem: RichTextFormatting.todoState(in: textView) != .plain
         )
-    }
-
-    func refreshLocalization() {
-        rootView.toolbar.refreshLocalization(color: note.color, isPinned: note.isPinned)
-        rootView.footer.refreshLocalization()
-        rootView.textView.setAccessibilityLabel(L10n.text("note.content"))
-        if saveStatusTimer?.isValid == true {
-            rootView.statusLabel.stringValue = L10n.text("note.saving")
-        } else {
-            markSaved()
-        }
-    }
-
-    @objc private func markSaved() {
-        rootView.statusLabel.stringValue = note.isPinned ? L10n.text("note.pinnedSaved") : L10n.text("note.saved")
     }
 
     private func saveFrame() {

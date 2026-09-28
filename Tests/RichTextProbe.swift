@@ -55,7 +55,9 @@ struct RichTextProbe {
         RichTextFormatting.toggleTodo(in: todoEditor)
         let todoPending = todoEditor.string == "☐ 第一项\n☐ 第二项"
             && RichTextFormatting.todoState(in: todoEditor) == .pending
-        RichTextFormatting.toggleTodo(in: todoEditor)
+        // Checking happens by clicking the circle, not with the to-do button.
+        RichTextFormatting.toggleTodoCompletion(atParagraphStart: 0, in: todoEditor)
+        RichTextFormatting.toggleTodoCompletion(atParagraphStart: 6, in: todoEditor)
         let firstTaskTextRange = NSRange(location: 2, length: 3)
         let firstTaskStrike = (todoEditor.textStorage?.attribute(.strikethroughStyle, at: firstTaskTextRange.location, effectiveRange: nil) as? NSNumber)?.intValue
         let todoCompleted = todoEditor.string == "☑ 第一项\n☑ 第二项"
@@ -67,6 +69,7 @@ struct RichTextProbe {
             .flatMap(RichTextCodec.decode)
         let todoSurvived = completedRoundTrip?.string == todoEditor.string
             && (completedRoundTrip?.attribute(.strikethroughStyle, at: firstTaskTextRange.location, effectiveRange: nil) as? NSNumber)?.intValue == NSUnderlineStyle.single.rawValue
+        // The button removes to-dos whether or not they are checked.
         RichTextFormatting.toggleTodo(in: todoEditor)
         let todoRemoved = todoEditor.string == "第一项\n第二项"
             && RichTextFormatting.todoState(in: todoEditor) == .plain
@@ -139,13 +142,130 @@ struct RichTextProbe {
         let markdownBold = markdownFont.map { NSFontManager.shared.traits(of: $0).contains(.boldFontMask) } ?? false
         let markdownBullets = markdownEditor.string == "重点\n• 第一项\n• 第二项"
 
-        let removedStrikeMarkdownEditor = NSTextView()
-        removedStrikeMarkdownEditor.isRichText = true
-        removedStrikeMarkdownEditor.string = "~~不再转换~~"
-        removedStrikeMarkdownEditor.setSelectedRange(NSRange(location: removedStrikeMarkdownEditor.string.utf16.count, length: 0))
-        let strikeMarkdownRemoved = !RichTextFormatting.applyMarkdownSyntax(in: removedStrikeMarkdownEditor)
-            && removedStrikeMarkdownEditor.string == "~~不再转换~~"
-            && removedStrikeMarkdownEditor.textStorage?.attribute(.strikethroughStyle, at: 2, effectiveRange: nil) == nil
+        func convertedEditor(_ text: String) -> NSTextView {
+            let editor = NSTextView()
+            editor.isRichText = true
+            editor.font = NoteAppearance.bodyFont()
+            editor.typingAttributes = [.font: NoteAppearance.bodyFont()]
+            editor.string = text
+            editor.setSelectedRange(NSRange(location: editor.string.utf16.count, length: 0))
+            _ = RichTextFormatting.applyMarkdownSyntax(in: editor)
+            return editor
+        }
+        func fontAt(_ editor: NSTextView, _ location: Int) -> NSFont? {
+            editor.textStorage?.attribute(.font, at: location, effectiveRange: nil) as? NSFont
+        }
+
+        let strikeEditor = convertedEditor("~~删除~~")
+        let strikeMarkdown = strikeEditor.string == "删除"
+            && (strikeEditor.textStorage?.attribute(.strikethroughStyle, at: 0, effectiveRange: nil) as? Int) == NSUnderlineStyle.single.rawValue
+
+        let headingEditor = convertedEditor("## 标题")
+        let headingMarkdown = headingEditor.string == "标题"
+            && RichTextFormatting.headingLevel(of: fontAt(headingEditor, 0)) == 2
+            && RichTextFormatting.headingLevel(of: headingEditor.typingAttributes[.font] as? NSFont) == 2
+
+        let italicEditor = convertedEditor("一个*斜体*词")
+        let italicMarkdown = italicEditor.string == "一个斜体词"
+            && fontAt(italicEditor, 2).map { NSFontManager.shared.traits(of: $0).contains(.italicFontMask) } == true
+        let arithmeticUntouched = convertedEditor("2*3*4").string == "2*3*4"
+
+        let codeEditor = convertedEditor("运行 `swift build`")
+        let codeMarkdown = codeEditor.string == "运行 swift build"
+            && fontAt(codeEditor, 3)?.isFixedPitch == true
+
+        let linkEditor = convertedEditor("见 [官网](https://example.com)")
+        let linkMarkdown = linkEditor.string == "见 官网"
+            && (linkEditor.textStorage?.attribute(.link, at: 2, effectiveRange: nil) as? URL)?.absoluteString == "https://example.com"
+        let nonLinkUntouched = convertedEditor("[注释](不是网址)").string == "[注释](不是网址)"
+
+        let todoMarkdownEditor = convertedEditor("- [ ] 买牛奶\n- [x] 已完成")
+        let todoMarkdown = todoMarkdownEditor.string == "☐ 买牛奶\n☑ 已完成"
+
+        // Clicking a checkbox flips only that item between open and done.
+        let clickEditor = NSTextView()
+        clickEditor.isRichText = true
+        clickEditor.allowsUndo = true
+        clickEditor.string = "☐ 买牛奶\n☑ 已完成"
+        let firstChecked = RichTextFormatting.toggleTodoCompletion(atParagraphStart: 0, in: clickEditor)
+            && clickEditor.string == "☑ 买牛奶\n☑ 已完成"
+            && (clickEditor.textStorage?.attribute(.strikethroughStyle, at: 2, effectiveRange: nil) as? Int) == NSUnderlineStyle.single.rawValue
+        let secondUnchecked = RichTextFormatting.toggleTodoCompletion(atParagraphStart: 6, in: clickEditor)
+            && clickEditor.string == "☑ 买牛奶\n☐ 已完成"
+            && clickEditor.textStorage?.attribute(.strikethroughStyle, at: 8, effectiveRange: nil) == nil
+        let plainIgnored = !RichTextFormatting.toggleTodoCompletion(atParagraphStart: 2, in: clickEditor)
+        // Backspace right after a marker removes the whole marker instead of leaving "☐".
+        let backspaceEditor = NSTextView()
+        backspaceEditor.isRichText = true
+        backspaceEditor.allowsUndo = true
+        backspaceEditor.string = "☐ \n• 列表"
+        backspaceEditor.setSelectedRange(NSRange(location: 2, length: 0))
+        let todoBackspace = RichTextFormatting.handleMarkerBackspace(in: backspaceEditor)
+            && backspaceEditor.string == "\n• 列表"
+        backspaceEditor.setSelectedRange(NSRange(location: 3, length: 0))
+        let bulletBackspace = RichTextFormatting.handleMarkerBackspace(in: backspaceEditor)
+            && backspaceEditor.string == "\n列表"
+        backspaceEditor.setSelectedRange(NSRange(location: 2, length: 0))
+        let ordinaryBackspace = !RichTextFormatting.handleMarkerBackspace(in: backspaceEditor)
+
+        // Lines broken by older versions ("☐123") become to-dos again.
+        let repairEditor = NSTextView()
+        repairEditor.isRichText = true
+        repairEditor.string = "☐123\n☑"
+        let repaired = RichTextFormatting.normalizeTodoMarkers(in: repairEditor)
+            && repairEditor.string == "☐ 123\n☑ "
+            && !RichTextFormatting.normalizeTodoMarkers(in: repairEditor)
+
+        // The to-do button toggles between to-do and plain, never checking the item.
+        let buttonEditor = NSTextView()
+        buttonEditor.isRichText = true
+        buttonEditor.string = "任务"
+        buttonEditor.setSelectedRange(NSRange(location: 0, length: 0))
+        RichTextFormatting.toggleTodo(in: buttonEditor)
+        let buttonAdds = buttonEditor.string == "☐ 任务"
+        RichTextFormatting.toggleTodo(in: buttonEditor)
+        let buttonRemoves = buttonEditor.string == "任务"
+
+        // In an empty note the marker keeps the note's font instead of AppKit's default.
+        let noteFont = NSFont.systemFont(ofSize: 18)
+        for toggle in [RichTextFormatting.toggleTodo(in:), RichTextFormatting.toggleBulletList(in:)] {
+            let emptyEditor = NSTextView()
+            emptyEditor.isRichText = true
+            emptyEditor.typingAttributes = [.font: noteFont]
+            toggle(emptyEditor)
+            guard (emptyEditor.textStorage?.attribute(.font, at: 0, effectiveRange: nil) as? NSFont)?.pointSize == 18,
+                  (emptyEditor.typingAttributes[.font] as? NSFont)?.pointSize == 18 else { exit(3) }
+        }
+
+        // Numbered lists: the button numbers lines, Return continues and renumbers,
+        // Return on an empty item and backspace after the number end the item.
+        let orderedEditor = NSTextView()
+        orderedEditor.isRichText = true
+        orderedEditor.allowsUndo = true
+        orderedEditor.string = "买菜\n做饭"
+        orderedEditor.setSelectedRange(NSRange(location: 0, length: orderedEditor.string.utf16.count))
+        RichTextFormatting.toggleOrderedList(in: orderedEditor)
+        let orderedOn = orderedEditor.string == "1. 买菜\n2. 做饭" && RichTextFormatting.isOrderedList(in: orderedEditor)
+        orderedEditor.setSelectedRange(NSRange(location: 5, length: 0))
+        let orderedContinues = RichTextFormatting.handleStructuredNewline(in: orderedEditor)
+            && orderedEditor.string == "1. 买菜\n2. \n3. 做饭"
+        let orderedEmptyEnds = RichTextFormatting.handleStructuredNewline(in: orderedEditor)
+            && orderedEditor.string == "1. 买菜\n\n3. 做饭"
+        orderedEditor.setSelectedRange(NSRange(location: 10, length: 0))
+        let orderedBackspace = RichTextFormatting.handleMarkerBackspace(in: orderedEditor)
+            && orderedEditor.string == "1. 买菜\n\n做饭"
+        orderedEditor.setSelectedRange(NSRange(location: 0, length: orderedEditor.string.utf16.count))
+        RichTextFormatting.toggleOrderedList(in: orderedEditor)
+        let orderedMixed = orderedEditor.string == "1. 买菜\n2. \n3. 做饭"
+        RichTextFormatting.toggleOrderedList(in: orderedEditor)
+        let orderedOff = orderedEditor.string == "买菜\n\n做饭"
+        let orderedList = orderedOn && orderedContinues && orderedEmptyEnds && orderedBackspace && orderedMixed && orderedOff
+
+        let checkboxClicks = firstChecked && secondUnchecked && plainIgnored && buttonAdds && buttonRemoves && orderedList
+            && todoBackspace && bulletBackspace && ordinaryBackspace && repaired
+
+        let extendedMarkdown = strikeMarkdown && headingMarkdown && italicMarkdown && arithmeticUntouched
+            && codeMarkdown && linkMarkdown && nonLinkUntouched && todoMarkdown
 
         let boldMarkdownEditor = NSTextView()
         boldMarkdownEditor.isRichText = true
@@ -236,7 +356,7 @@ struct RichTextProbe {
         orphanBulletEditor.setSelectedRange(NSRange(location: 2, length: 0))
         let orphanPrevented = !RichTextFormatting.adjustBulletLevel(in: orphanBulletEditor, delta: 1)
 
-        print("bold=\(boldSurvived) legacyStrike=\(strikeSurvived) todo=\(todoPending && todoCompleted && todoRemoved && todoSurvived && todoSelectionPreserved && completedTodoNewline && splitCompletedTodo) bullet=\(bulletSurvived) futureBold=\(futureBoldOn && futureBoldOff) bulletToggle=\(bulletsOn && bulletsOff && bulletSelectionPreserved && bulletBecameTodo && todoBecameBullet) markdown=\(markdownChanged && markdownBold && markdownBullets && strikeMarkdownRemoved && trailingIsRegular) listExit=\(listExitClean) nesting=\(multiLevelOn && multiLevelOff && multiLevelSurvived && orphanPrevented && tieredMarkers && inheritedMarker && normalizedLegacyMarker) markerProportions=\(markerProportionsAreBalanced) bytes=\(data.count)")
-        guard boldSurvived, bulletSurvived, strikeSurvived, futureBoldOn, futureBoldOff, todoPending, todoCompleted, todoRemoved, todoSurvived, todoSelectionPreserved, completedTodoNewline, splitCompletedTodo, bulletsOn, bulletsOff, bulletSelectionPreserved, bulletBecameTodo, todoBecameBullet, markdownChanged, markdownBold, markdownBullets, strikeMarkdownRemoved, trailingIsRegular, listExitClean, multiLevelOn, multiLevelOff, multiLevelSurvived, orphanPrevented, tieredMarkers, inheritedMarker, normalizedLegacyMarker, markerProportionsAreBalanced else { exit(1) }
+        print("bold=\(boldSurvived) legacyStrike=\(strikeSurvived) todo=\(todoPending && todoCompleted && todoRemoved && todoSurvived && todoSelectionPreserved && completedTodoNewline && splitCompletedTodo) bullet=\(bulletSurvived) futureBold=\(futureBoldOn && futureBoldOff) bulletToggle=\(bulletsOn && bulletsOff && bulletSelectionPreserved && bulletBecameTodo && todoBecameBullet) markdown=\(markdownChanged && markdownBold && markdownBullets && extendedMarkdown && trailingIsRegular) listExit=\(listExitClean) nesting=\(multiLevelOn && multiLevelOff && multiLevelSurvived && orphanPrevented && tieredMarkers && inheritedMarker && normalizedLegacyMarker) markerProportions=\(markerProportionsAreBalanced) bytes=\(data.count)")
+        guard boldSurvived, bulletSurvived, strikeSurvived, futureBoldOn, futureBoldOff, todoPending, todoCompleted, todoRemoved, todoSurvived, todoSelectionPreserved, completedTodoNewline, splitCompletedTodo, bulletsOn, bulletsOff, bulletSelectionPreserved, bulletBecameTodo, todoBecameBullet, markdownChanged, markdownBold, markdownBullets, extendedMarkdown, checkboxClicks, trailingIsRegular, listExitClean, multiLevelOn, multiLevelOff, multiLevelSurvived, orphanPrevented, tieredMarkers, inheritedMarker, normalizedLegacyMarker, markerProportionsAreBalanced else { exit(1) }
     }
 }
