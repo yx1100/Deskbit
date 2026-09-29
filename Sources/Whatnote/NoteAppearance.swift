@@ -3,7 +3,7 @@ import AppKit
 enum NoteAppearance {
     static let defaultSize = NSSize(width: 340, height: 260)
     static let minimumSize = NSSize(width: 300, height: 200)
-    static let bodyFontSize: CGFloat = 18
+    static let bodyFontSize: CGFloat = 16
     static let cornerRadius: CGFloat = 16
 
     /// Floating glass controls: the top strip doubles as the drag handle,
@@ -21,15 +21,20 @@ enum NoteAppearance {
         NSFont.systemFont(ofSize: bodyFontSize, weight: weight)
     }
 
+    /// Line and paragraph spacing, applied by the note's layout manager to every paragraph.
+    static let lineSpacing: CGFloat = 3
+    static let paragraphSpacing: CGFloat = 8
+
     /// Earlier text sizes, keyed by their body size: body, headings and inline code map to today's sizes.
-    /// Checked in this order: the 16 pt era also used 24 pt, for first-level headings.
+    /// Checked in this order: the earlier 16 pt era also used 24 and 18 pt, for headings.
     private static let legacySizes: [(body: CGFloat, sizes: [CGFloat: CGFloat])] = [
-        (16, [16: 18, 24: 26, 20: 22, 18: 20, 15: 17]),
-        (13, [13: 18, 20: 26, 17: 22, 15: 20, 12: 17]),
-        (24, [24: 18, 34: 26, 30: 22, 27: 20, 23: 17])
+        (16, [24: 22, 20: 19, 18: 17]),
+        (13, [13: 16, 20: 22, 17: 19, 15: 17, 12: 15]),
+        (24, [24: 16, 34: 22, 30: 19, 27: 17, 23: 15]),
+        (18, [18: 16, 26: 22, 22: 19, 20: 17, 17: 15])
     ]
 
-    /// Enlarges text saved with an earlier body size. Returns whether anything changed.
+    /// Resizes text saved with an earlier body size. Returns whether anything changed.
     @discardableResult
     static func upgradeLegacyFontSizes(in text: NSMutableAttributedString) -> Bool {
         let whole = NSRange(location: 0, length: text.length)
@@ -38,12 +43,14 @@ enum NoteAppearance {
             if let font = value as? NSFont { sizes.insert(font.pointSize) }
         }
         guard let era = legacySizes.first(where: { sizes.contains($0.body) }) else { return false }
+        var changed = false
         text.enumerateAttribute(.font, in: whole) { value, range, _ in
             guard let font = value as? NSFont,
                   let newSize = era.sizes[font.pointSize],
                   let resized = NSFont(descriptor: font.fontDescriptor, size: newSize) else { return }
             text.addAttribute(.font, value: resized, range: range)
+            changed = true
         }
-        return true
+        return changed
     }
 }

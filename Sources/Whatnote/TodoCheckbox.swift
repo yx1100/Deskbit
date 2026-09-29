@@ -194,6 +194,29 @@ final class NoteLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
         return glyphRange.length
     }
 
+    /// Spacing between wrapped lines and after each paragraph, uniform for every note.
+    func layoutManager(
+        _ layoutManager: NSLayoutManager,
+        lineSpacingAfterGlyphAt glyphIndex: Int,
+        withProposedLineFragmentRect rect: NSRect
+    ) -> CGFloat {
+        max(NoteAppearance.lineSpacing, paragraphStyle(atGlyph: glyphIndex, in: layoutManager)?.lineSpacing ?? 0)
+    }
+
+    func layoutManager(
+        _ layoutManager: NSLayoutManager,
+        paragraphSpacingAfterGlyphAt glyphIndex: Int,
+        withProposedLineFragmentRect rect: NSRect
+    ) -> CGFloat {
+        max(NoteAppearance.paragraphSpacing, paragraphStyle(atGlyph: glyphIndex, in: layoutManager)?.paragraphSpacing ?? 0)
+    }
+
+    private func paragraphStyle(atGlyph glyphIndex: Int, in layoutManager: NSLayoutManager) -> NSParagraphStyle? {
+        guard let storage = layoutManager.textStorage, storage.length > 0 else { return nil }
+        let index = min(layoutManager.characterIndexForGlyph(at: glyphIndex), storage.length - 1)
+        return storage.attribute(.paragraphStyle, at: index, effectiveRange: nil) as? NSParagraphStyle
+    }
+
     func layoutManager(
         _ layoutManager: NSLayoutManager,
         shouldUse action: NSLayoutManager.ControlCharacterAction,
