@@ -484,7 +484,39 @@ struct RichTextProbe {
         let codeButton = codeButtonOn && codeButtonOff && emptyCodeStarted
         print("codeButton on=\(codeButtonOn) off=\(codeButtonOff) empty=\(emptyCodeStarted)")
 
-        let codeBlocks = codeButton && trailingLinePlain && fenceStarted && codeKeepsMarkdown && codeContinues && codeEnds && codeRoundTrip && codeBackspace && pastedCode
+        // The cursor rests only at a divider's left end. Backspace below a divider deletes its last
+        // dash; at its left end Backspace is left to AppKit, which joins it to the line above.
+        let dividerCursorEditor = NSTextView()
+        dividerCursorEditor.isRichText = true
+        dividerCursorEditor.string = "上\n---\n下"
+        func snapped(_ location: Int, from old: Int, userMove: Bool = true) -> Int {
+            RichTextFormatting.selectionAvoidingDividers(
+                NSRange(location: location, length: 0),
+                from: NSRange(location: old, length: 0),
+                isUserMove: userMove,
+                in: dividerCursorEditor
+            ).location
+        }
+        let clickedDivider = snapped(3, from: 0) == 2 && snapped(4, from: 7) == 2
+        let backIntoDivider = snapped(5, from: 6) == 2
+        let rightFromDivider = snapped(3, from: 2) == 6
+        let plainLineUntouched = snapped(7, from: 0) == 7 && snapped(2, from: 0) == 2
+        let typingDividerUntouched = snapped(5, from: 4, userMove: false) == 5
+        dividerCursorEditor.setSelectedRange(NSRange(location: 6, length: 0))
+        let backspaceBelow = RichTextFormatting.handleDividerBackspace(in: dividerCursorEditor)
+            && dividerCursorEditor.string == "上\n--\n下"
+            && dividerCursorEditor.selectedRange().location == 4
+        dividerCursorEditor.string = "上\n---\n下"
+        dividerCursorEditor.setSelectedRange(NSRange(location: 2, length: 0))
+        let backspaceAtDivider = !RichTextFormatting.handleDividerBackspace(in: dividerCursorEditor)
+            && dividerCursorEditor.string == "上\n---\n下"
+        dividerCursorEditor.setSelectedRange(NSRange(location: 3, length: 0))
+        let ordinaryBackspaceIgnored = !RichTextFormatting.handleDividerBackspace(in: dividerCursorEditor)
+        let dividerCursor = clickedDivider && backIntoDivider && rightFromDivider && plainLineUntouched
+            && typingDividerUntouched && backspaceBelow && backspaceAtDivider && ordinaryBackspaceIgnored
+        print("dividerCursor click=\(clickedDivider) back=\(backIntoDivider) right=\(rightFromDivider) plain=\(plainLineUntouched) typing=\(typingDividerUntouched) backspaceBelow=\(backspaceBelow) backspaceAt=\(backspaceAtDivider) ordinary=\(ordinaryBackspaceIgnored)")
+
+        let codeBlocks = dividerCursor && codeButton && trailingLinePlain && fenceStarted && codeKeepsMarkdown && codeContinues && codeEnds && codeRoundTrip && codeBackspace && pastedCode
         print("codeBlock start=\(fenceStarted) keepsMarkdown=\(codeKeepsMarkdown) continues=\(codeContinues) ends=\(codeEnds) roundTrip=\(codeRoundTrip) backspace=\(codeBackspace) pasted=\(pastedCode)")
 
         print("bold=\(boldSurvived) legacyStrike=\(strikeSurvived) todo=\(todoPending && todoCompleted && todoRemoved && todoSurvived && todoSelectionPreserved && completedTodoNewline && splitCompletedTodo) bullet=\(bulletSurvived) futureBold=\(futureBoldOn && futureBoldOff) bulletToggle=\(bulletsOn && bulletsOff && bulletSelectionPreserved && bulletBecameTodo && todoBecameBullet) markdown=\(markdownChanged && markdownBold && markdownBullets && extendedMarkdown && trailingIsRegular) listExit=\(listExitClean) nesting=\(multiLevelOn && multiLevelOff && multiLevelSurvived && orphanPrevented && tieredMarkers && inheritedMarker && normalizedLegacyMarker) markerProportions=\(markerProportionsAreBalanced) bytes=\(data.count)")

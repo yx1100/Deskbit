@@ -338,23 +338,6 @@ final class StickyTextView: NSTextView {
         return true
     }
 
-    /// The first line of a code block holds padding above its text; keep the caret to the text.
-    override func drawInsertionPoint(in rect: NSRect, color: NSColor, turnedOn flag: Bool) {
-        super.drawInsertionPoint(in: caretRect(from: rect), color: color, turnedOn: flag)
-    }
-
-    private func caretRect(from rect: NSRect) -> NSRect {
-        guard let storage = textStorage, let layoutManager, storage.length > 0 else { return rect }
-        let location = selectedRange().location
-        guard location < storage.length else { return rect }
-        let paragraphStart = (storage.string as NSString).paragraphRange(for: NSRange(location: location, length: 0)).location
-        guard CodeBlock.isFirstLine(in: storage, at: paragraphStart) else { return rect }
-        let caretLine = layoutManager.lineFragmentRect(forGlyphAt: layoutManager.glyphIndexForCharacter(at: location), effectiveRange: nil)
-        let firstLine = layoutManager.lineFragmentRect(forGlyphAt: layoutManager.glyphIndexForCharacter(at: paragraphStart), effectiveRange: nil)
-        guard caretLine.minY == firstLine.minY, rect.height > CodeBlock.verticalPadding else { return rect }
-        return NSRect(x: rect.minX, y: rect.minY + CodeBlock.verticalPadding, width: rect.width, height: rect.height - CodeBlock.verticalPadding)
-    }
-
     override func insertNewline(_ sender: Any?) {
         if onStructuredNewline?() == true { return }
         super.insertNewline(sender)
@@ -487,7 +470,8 @@ final class StickyRootView: NSView {
         textView.drawsBackground = false
         textView.isAutomaticQuoteSubstitutionEnabled = false
         textView.isAutomaticDashSubstitutionEnabled = false
-        textView.textContainerInset = NSSize(width: 14, height: 2)
+        // The extra height leaves room for a code block's background above the first line.
+        textView.textContainerInset = NSSize(width: 14, height: 2 + CodeBlock.verticalPadding)
         textView.textContainer?.widthTracksTextView = true
         textView.autoresizingMask = [.width]
         textView.setAccessibilityLabel("便签内容")
