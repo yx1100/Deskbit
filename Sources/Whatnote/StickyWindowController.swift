@@ -53,8 +53,10 @@ final class StickyWindowController: NSWindowController, NSWindowDelegate, NSText
         }
         rootView.textView.onDeleteBackward = { [weak self] in
             guard let self else { return false }
-            return RichTextFormatting.handleMarkerBackspace(in: self.rootView.textView)
+            return RichTextFormatting.handleCodeBackspace(in: self.rootView.textView)
+                || RichTextFormatting.handleMarkerBackspace(in: self.rootView.textView)
         }
+        rootView.textView.onCloseNote = { [weak self] in self?.didTapComplete() }
         let repairedBullets = RichTextFormatting.normalizeBulletMarkers(in: rootView.textView)
         let repairedTodos = RichTextFormatting.normalizeTodoMarkers(in: rootView.textView)
         if repairedBullets || repairedTodos {
@@ -125,9 +127,12 @@ final class StickyWindowController: NSWindowController, NSWindowDelegate, NSText
         }
         persistText()
         updateFormattingState()
+        // A code block's background spans lines the edit itself did not touch.
+        rootView.textView.needsDisplay = true
     }
 
     func textViewDidChangeSelection(_ notification: Notification) {
+        RichTextFormatting.leaveCodeStyleOnEmptyLastLine(in: rootView.textView)
         updateFormattingState()
     }
 
@@ -169,6 +174,13 @@ final class StickyWindowController: NSWindowController, NSWindowDelegate, NSText
         let textView = rootView.textView
         window?.makeFirstResponder(textView)
         RichTextFormatting.insertDivider(in: textView)
+    }
+
+    func didTapCodeBlock() {
+        let textView = rootView.textView
+        window?.makeFirstResponder(textView)
+        RichTextFormatting.toggleCodeBlock(in: textView)
+        updateFormattingState()
     }
 
     func didTapTodo() {
@@ -326,7 +338,8 @@ final class StickyWindowController: NSWindowController, NSWindowDelegate, NSText
             isBold: RichTextFormatting.isBold(in: textView),
             isBulletList: RichTextFormatting.isBulletList(in: textView),
             isOrderedList: RichTextFormatting.isOrderedList(in: textView),
-            isTodoItem: RichTextFormatting.todoState(in: textView) != .plain
+            isTodoItem: RichTextFormatting.todoState(in: textView) != .plain,
+            isCodeBlock: RichTextFormatting.isCodeBlock(in: textView)
         )
     }
 

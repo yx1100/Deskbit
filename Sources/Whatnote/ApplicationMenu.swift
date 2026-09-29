@@ -19,6 +19,8 @@ enum ApplicationMenu {
         let fileItem = NSMenuItem(title: "文件", action: nil, keyEquivalent: "")
         let fileMenu = NSMenu(title: "文件")
         fileMenu.addItem(withTitle: "新建便签", action: #selector(AppStatusMenuTarget.newNoteFromMenu), keyEquivalent: "n")
+        // ⌘W in a note is handled by the note itself; this closes other windows such as Settings.
+        fileMenu.addItem(withTitle: "关闭窗口", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
         fileItem.submenu = fileMenu
         mainMenu.addItem(fileItem)
 

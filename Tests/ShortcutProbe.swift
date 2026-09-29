@@ -21,6 +21,8 @@ struct ShortcutProbe {
         editor.onToggleOrderedList = { orderedCount += 1 }
         editor.onToggleItalic = { italicCount += 1 }
         editor.onToggleChecked = { checkedCount += 1 }
+        var closeCount = 0
+        editor.onCloseNote = { closeCount += 1 }
         editor.onAdjustBulletLevel = { delta in
             indentationDeltas.append(delta)
             return true
@@ -58,6 +60,19 @@ struct ShortcutProbe {
         editor.insertTab(nil)
         editor.insertBacktab(nil)
 
+        // ⌘W closes the note; so does Esc pressed twice in quick succession, but not a lone Esc.
+        let close = keyEvent(modifiers: [.command], characters: "w", ignoringModifiers: "w")
+        _ = editor.performKeyEquivalent(with: close)
+        let commandWCloses = closeCount == 1
+        editor.keyDown(with: keyEvent(modifiers: [], characters: "\u{1B}", ignoringModifiers: "\u{1B}", keyCode: 53, timestamp: 10))
+        let singleEscapeWaits = closeCount == 1
+        editor.keyDown(with: keyEvent(modifiers: [], characters: "\u{1B}", ignoringModifiers: "\u{1B}", keyCode: 53, timestamp: 10.2))
+        let doubleEscapeCloses = closeCount == 2
+        editor.keyDown(with: keyEvent(modifiers: [], characters: "\u{1B}", ignoringModifiers: "\u{1B}", keyCode: 53, timestamp: 20))
+        editor.keyDown(with: keyEvent(modifiers: [], characters: "\u{1B}", ignoringModifiers: "\u{1B}", keyCode: 53, timestamp: 25))
+        let slowEscapesIgnored = closeCount == 2
+        let closeShortcuts = commandWCloses && singleEscapeWaits && doubleEscapeCloses && slowEscapesIgnored
+
         let editingShortcuts = [
             StickyEditingShortcut.command(for: [.command], key: "c"),
             StickyEditingShortcut.command(for: [.command], key: "x"),
@@ -65,7 +80,7 @@ struct ShortcutProbe {
             StickyEditingShortcut.command(for: [.command], key: "a")
         ]
 
-        print("boldShortcut=\(boldCount == 1) bulletShortcut=\(bulletCount == 1) todoShortcut=\(todoCount == 1) linkShortcut=\(linkCount == 1) markdownAsterisk=\(markdownAsteriskPassedThrough) nestingShortcuts=\(indentationDeltas == [1, -1]) editingShortcuts=\(editingShortcuts == [.copy, .cut, .paste, .selectAll])")
+        print("boldShortcut=\(boldCount == 1) bulletShortcut=\(bulletCount == 1) todoShortcut=\(todoCount == 1) linkShortcut=\(linkCount == 1) markdownAsterisk=\(markdownAsteriskPassedThrough) nestingShortcuts=\(indentationDeltas == [1, -1]) editingShortcuts=\(editingShortcuts == [.copy, .cut, .paste, .selectAll]) closeShortcuts=\(closeShortcuts)")
         guard boldCount == 1,
               bulletCount == 1,
               todoCount == 1,
@@ -75,21 +90,28 @@ struct ShortcutProbe {
               checkedCount == 1,
               markdownAsteriskPassedThrough,
               indentationDeltas == [1, -1],
-              editingShortcuts == [.copy, .cut, .paste, .selectAll] else { exit(1) }
+              editingShortcuts == [.copy, .cut, .paste, .selectAll],
+              closeShortcuts else { exit(1) }
     }
 
-    private static func keyEvent(modifiers: NSEvent.ModifierFlags, characters: String, ignoringModifiers: String) -> NSEvent {
+    private static func keyEvent(
+        modifiers: NSEvent.ModifierFlags,
+        characters: String,
+        ignoringModifiers: String,
+        keyCode: UInt16 = 0,
+        timestamp: TimeInterval = 0
+    ) -> NSEvent {
         NSEvent.keyEvent(
             with: .keyDown,
             location: .zero,
             modifierFlags: modifiers,
-            timestamp: 0,
+            timestamp: timestamp,
             windowNumber: 0,
             context: nil,
             characters: characters,
             charactersIgnoringModifiers: ignoringModifiers,
             isARepeat: false,
-            keyCode: 0
+            keyCode: keyCode
         )!
     }
 }

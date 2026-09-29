@@ -209,6 +209,8 @@ final class AppController: NSObject, NSApplicationDelegate, UNUserNotificationCe
             panel.title = "设置"
             panel.isReleasedWhenClosed = false
             panel.isFloatingPanel = false
+            // Panels hide when the app is deactivated; Settings should stay until closed.
+            panel.hidesOnDeactivate = false
             panel.level = .normal
             panel.contentViewController = viewController
             panel.center()

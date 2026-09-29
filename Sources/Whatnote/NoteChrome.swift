@@ -70,7 +70,11 @@ final class NoteToolButton: NSButton {
     var accentColor: NSColor = NoteAppearance.iconColor { didSet { refreshAppearance() } }
     private var isHovered = false { didSet { needsDisplay = true } }
 
-    init(symbol: String, fallbackSymbol: String? = nil, tip: String, action: Selector) {
+    /// Symbols at the same point size differ in width; a wide one can use a smaller `pointSize`.
+    private let pointSize: CGFloat
+
+    init(symbol: String, fallbackSymbol: String? = nil, tip: String, pointSize: CGFloat = 13, action: Selector) {
+        self.pointSize = pointSize
         super.init(frame: .zero)
         title = ""
         imagePosition = .imageOnly
@@ -99,7 +103,7 @@ final class NoteToolButton: NSButton {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     func setSymbol(_ symbol: String, fallbackSymbol: String? = nil, tip: String) {
-        let configuration = NSImage.SymbolConfiguration(pointSize: 13, weight: .medium)
+        let configuration = NSImage.SymbolConfiguration(pointSize: pointSize, weight: .medium)
         let symbolImage = NSImage(systemSymbolName: symbol, accessibilityDescription: tip)
             ?? fallbackSymbol.flatMap { NSImage(systemSymbolName: $0, accessibilityDescription: tip) }
         image = symbolImage?.withSymbolConfiguration(configuration) ?? NSImage(size: NSSize(width: 14, height: 14))

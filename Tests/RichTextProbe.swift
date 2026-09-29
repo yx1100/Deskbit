@@ -398,7 +398,96 @@ struct RichTextProbe {
         orphanBulletEditor.setSelectedRange(NSRange(location: 2, length: 0))
         let orphanPrevented = !RichTextFormatting.adjustBulletLevel(in: orphanBulletEditor, delta: 1)
 
+        // Code blocks: "```" and Return starts one, Markdown inside stays as typed, Return on an
+        // empty line stays in the block, a closing fence ends it, Backspace on its first line
+        // undoes it, and it survives saving.
+        let codeBlockEditor = NSTextView()
+        codeBlockEditor.isRichText = true
+        codeBlockEditor.allowsUndo = true
+        codeBlockEditor.typingAttributes = [.font: NoteAppearance.bodyFont()]
+        codeBlockEditor.string = "说明\n```"
+        codeBlockEditor.setSelectedRange(NSRange(location: codeBlockEditor.string.utf16.count, length: 0))
+        let codeStorage = codeBlockEditor.textStorage!
+        let fenceStarted = RichTextFormatting.handleStructuredNewline(in: codeBlockEditor)
+            && codeBlockEditor.string == "说明\n\n"
+            && CodeBlock.isCodeLine(in: codeStorage, at: 3)
+            && codeBlockEditor.selectedRange().location == 3
+        codeBlockEditor.insertText("**x** = 1", replacementRange: codeBlockEditor.selectedRange())
+        _ = RichTextFormatting.applyMarkdownSyntax(in: codeBlockEditor)
+        let codeKeepsMarkdown = codeBlockEditor.string == "说明\n**x** = 1\n"
+            && fontAt(codeBlockEditor, 3)?.isFixedPitch == true
+        let codeContinues = RichTextFormatting.handleStructuredNewline(in: codeBlockEditor)
+            && codeBlockEditor.string == "说明\n**x** = 1\n\n"
+            && CodeBlock.isCodeLine(in: codeStorage, at: 13)
+        // An empty line stays in the block; only a closing fence ends it.
+        let emptyLineContinues = RichTextFormatting.handleStructuredNewline(in: codeBlockEditor)
+            && codeBlockEditor.string == "说明\n**x** = 1\n\n\n"
+            && CodeBlock.isCodeLine(in: codeStorage, at: 14)
+        codeBlockEditor.insertText("```", replacementRange: codeBlockEditor.selectedRange())
+        let codeEnds = emptyLineContinues
+            && RichTextFormatting.handleStructuredNewline(in: codeBlockEditor)
+            && codeBlockEditor.string == "说明\n**x** = 1\n\n\n"
+            && CodeBlock.isCodeLine(in: codeStorage, at: 3)
+            && CodeBlock.isCodeLine(in: codeStorage, at: 13)
+            && !CodeBlock.isCodeLine(in: codeStorage, at: 14)
+            && codeBlockEditor.selectedRange().location == 14
+        let codeRoundTrip = RichTextCodec.encode(codeBlockEditor.attributedString())
+            .flatMap(RichTextCodec.decode)
+            .map { CodeBlock.isCodeLine(in: $0, at: 3) && !CodeBlock.isCodeLine(in: $0, at: 0) } ?? false
+        codeBlockEditor.setSelectedRange(NSRange(location: 3, length: 0))
+        let codeBackspace = RichTextFormatting.handleCodeBackspace(in: codeBlockEditor)
+            && !CodeBlock.isCodeLine(in: codeStorage, at: 3)
+            && codeBlockEditor.string == "说明\n**x** = 1\n\n\n"
+
+        // Clicking the empty line after a block at the end of the note types plain text.
+        let trailingEditor = NSTextView()
+        trailingEditor.isRichText = true
+        RichTextFormatting.toggleCodeBlock(in: trailingEditor)
+        trailingEditor.setSelectedRange(NSRange(location: 1, length: 0))
+        trailingEditor.typingAttributes = CodeBlock.attributes()
+        RichTextFormatting.leaveCodeStyleOnEmptyLastLine(in: trailingEditor)
+        let trailingLinePlain = !CodeBlock.isCodeStyle(trailingEditor.typingAttributes[.paragraphStyle] as? NSParagraphStyle)
+            && !RichTextFormatting.isCodeBlock(in: trailingEditor)
+            && CodeBlock.isCodeLine(in: trailingEditor.textStorage!, at: 0)
+        print("codeBlock trailingPlain=\(trailingLinePlain)")
+
+        let pastedCodeEditor = convertedEditor("前\n```swift\nlet a = 1\n# 不是标题\n```\n后")
+        let pastedCodeStorage = pastedCodeEditor.textStorage!
+        let pastedCode = pastedCodeEditor.string == "前\nlet a = 1\n# 不是标题\n后"
+            && !CodeBlock.isCodeLine(in: pastedCodeStorage, at: 0)
+            && CodeBlock.isCodeLine(in: pastedCodeStorage, at: 2)
+            && CodeBlock.isCodeLine(in: pastedCodeStorage, at: 12)
+            && !CodeBlock.isCodeLine(in: pastedCodeStorage, at: 19)
+            && CodeBlock.blocks(in: pastedCodeStorage, overlapping: NSRange(location: 14, length: 1)) == [NSRange(location: 2, length: 17)]
+        let codeButtonEditor = NSTextView()
+        codeButtonEditor.isRichText = true
+        codeButtonEditor.string = "甲\n乙\n丙"
+        codeButtonEditor.setSelectedRange(NSRange(location: 0, length: 3))
+        RichTextFormatting.toggleCodeBlock(in: codeButtonEditor)
+        let codeButtonStorage = codeButtonEditor.textStorage!
+        let codeButtonOn = CodeBlock.isCodeLine(in: codeButtonStorage, at: 0)
+            && CodeBlock.isCodeLine(in: codeButtonStorage, at: 2)
+            && !CodeBlock.isCodeLine(in: codeButtonStorage, at: 4)
+            && RichTextFormatting.isCodeBlock(in: codeButtonEditor)
+            && CodeBlock.isFirstLine(in: codeButtonStorage, at: 0)
+            && !CodeBlock.isFirstLine(in: codeButtonStorage, at: 2)
+        RichTextFormatting.toggleCodeBlock(in: codeButtonEditor)
+        let codeButtonOff = !CodeBlock.isCodeLine(in: codeButtonStorage, at: 0)
+            && !CodeBlock.isCodeLine(in: codeButtonStorage, at: 2)
+            && codeButtonEditor.string == "甲\n乙\n丙"
+        let emptyCodeEditor = NSTextView()
+        emptyCodeEditor.isRichText = true
+        RichTextFormatting.toggleCodeBlock(in: emptyCodeEditor)
+        let emptyCodeStarted = emptyCodeEditor.string == "\n"
+            && CodeBlock.isCodeLine(in: emptyCodeEditor.textStorage!, at: 0)
+            && emptyCodeEditor.selectedRange().location == 0
+        let codeButton = codeButtonOn && codeButtonOff && emptyCodeStarted
+        print("codeButton on=\(codeButtonOn) off=\(codeButtonOff) empty=\(emptyCodeStarted)")
+
+        let codeBlocks = codeButton && trailingLinePlain && fenceStarted && codeKeepsMarkdown && codeContinues && codeEnds && codeRoundTrip && codeBackspace && pastedCode
+        print("codeBlock start=\(fenceStarted) keepsMarkdown=\(codeKeepsMarkdown) continues=\(codeContinues) ends=\(codeEnds) roundTrip=\(codeRoundTrip) backspace=\(codeBackspace) pasted=\(pastedCode)")
+
         print("bold=\(boldSurvived) legacyStrike=\(strikeSurvived) todo=\(todoPending && todoCompleted && todoRemoved && todoSurvived && todoSelectionPreserved && completedTodoNewline && splitCompletedTodo) bullet=\(bulletSurvived) futureBold=\(futureBoldOn && futureBoldOff) bulletToggle=\(bulletsOn && bulletsOff && bulletSelectionPreserved && bulletBecameTodo && todoBecameBullet) markdown=\(markdownChanged && markdownBold && markdownBullets && extendedMarkdown && trailingIsRegular) listExit=\(listExitClean) nesting=\(multiLevelOn && multiLevelOff && multiLevelSurvived && orphanPrevented && tieredMarkers && inheritedMarker && normalizedLegacyMarker) markerProportions=\(markerProportionsAreBalanced) bytes=\(data.count)")
-        guard boldSurvived, bulletSurvived, strikeSurvived, futureBoldOn, futureBoldOff, todoPending, todoCompleted, todoRemoved, todoSurvived, todoSelectionPreserved, completedTodoNewline, splitCompletedTodo, bulletsOn, bulletsOff, bulletSelectionPreserved, bulletBecameTodo, todoBecameBullet, markdownChanged, markdownBold, markdownBullets, extendedMarkdown, checkboxClicks, trailingIsRegular, listExitClean, multiLevelOn, multiLevelOff, multiLevelSurvived, orphanPrevented, tieredMarkers, inheritedMarker, normalizedLegacyMarker, markerProportionsAreBalanced else { exit(1) }
+        guard boldSurvived, bulletSurvived, strikeSurvived, futureBoldOn, futureBoldOff, todoPending, todoCompleted, todoRemoved, todoSurvived, todoSelectionPreserved, completedTodoNewline, splitCompletedTodo, bulletsOn, bulletsOff, bulletSelectionPreserved, bulletBecameTodo, todoBecameBullet, markdownChanged, markdownBold, markdownBullets, extendedMarkdown, checkboxClicks, trailingIsRegular, listExitClean, multiLevelOn, multiLevelOff, multiLevelSurvived, orphanPrevented, tieredMarkers, inheritedMarker, normalizedLegacyMarker, markerProportionsAreBalanced, codeBlocks else { exit(1) }
     }
 }

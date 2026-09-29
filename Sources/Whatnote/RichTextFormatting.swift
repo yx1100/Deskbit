@@ -456,7 +456,7 @@ enum RichTextFormatting {
     }
 
     /// Converts Markdown syntax into rich text as it is typed or pasted:
-    /// `# 标题`, `**粗体**`, `*斜体*`, `~~删除线~~`, `` `代码` ``, `[文字](网址)`, `- 列表`, `- [ ] 待办`.
+    /// `# 标题`, `**粗体**`, `*斜体*`, `~~删除线~~`, `` `代码` ``, ```` ``` ```` 代码块, `[文字](网址)`, `- 列表`, `- [ ] 待办`.
     @discardableResult
     static func applyMarkdownSyntax(in textView: NSTextView) -> Bool {
         guard let storage = textView.textStorage, !textView.hasMarkedText() else { return false }
@@ -465,9 +465,11 @@ enum RichTextFormatting {
         var headingTypingFont: NSFont?
         var changed = false
 
+        // Markdown inside code blocks stays as typed.
         func matches(_ pattern: String) -> [NSTextCheckingResult] {
             guard let expression = try? NSRegularExpression(pattern: pattern) else { return [] }
             return expression.matches(in: storage.string, range: NSRange(location: 0, length: storage.length))
+                .filter { !CodeBlock.isCodeLine(in: storage, at: $0.range.location) }
         }
 
         func replace(_ range: NSRange, with replacement: NSAttributedString) {
@@ -484,6 +486,20 @@ enum RichTextFormatting {
             value.enumerateAttribute(.font, in: NSRange(location: 0, length: value.length)) { font, range, _ in
                 value.addAttribute(.font, value: transform((font as? NSFont) ?? NoteAppearance.bodyFont()), range: range)
             }
+        }
+
+        // ```
+        // 代码
+        // ```  — usually pasted; typing a fence and Return starts a block right away.
+        for match in matches(#"(?m)^[ \t]*```[^`\s]*[ \t]*\n((?:.*\n)+?)[ \t]*```[ \t]*$"#).reversed() {
+            var code = (storage.string as NSString).substring(with: match.range(at: 1))
+            if NSMaxRange(match.range) < storage.length { code.removeLast() }
+            let start = match.range.location
+            replace(match.range, with: NSAttributedString(string: code, attributes: CodeBlock.attributes()))
+            let paragraphs = (storage.string as NSString).paragraphRange(
+                for: NSRange(location: start, length: max(0, (code as NSString).length - 1))
+            )
+            storage.addAttribute(.paragraphStyle, value: CodeBlock.paragraphStyle(), range: paragraphs)
         }
 
         // [文字](网址) — image syntax `![...](...)` is left alone.
@@ -594,6 +610,8 @@ enum RichTextFormatting {
             ? NSRange(location: 0, length: 0)
             : nsString.paragraphRange(for: NSRange(location: lookup, length: 0))
 
+        if let handled = handleCodeNewline(in: textView, selection: selection) { return handled }
+
         let taskState = todoState(in: storage.string, at: paragraph.location)
         if taskState != .plain {
             setTypingTodoCompletion(false, textView: textView)
@@ -643,6 +661,144 @@ enum RichTextFormatting {
         } else {
             textView.insertText("\n\(marker) ", replacementRange: selection)
         }
+        return true
+    }
+
+    /// The code block button: turns the selected lines into a code block, or back into
+    /// plain text when they all are code already.
+    static func toggleCodeBlock(in textView: NSTextView) {
+        guard let storage = textView.textStorage else { return }
+        let selection = textView.selectedRange()
+        let nsString = storage.string as NSString
+        let atEmptyLastLine = selection.location >= storage.length
+            && (storage.length == 0 || nsString.character(at: storage.length - 1) == 0x0A)
+        if atEmptyLastLine {
+            // Give the new block a real line so it has something to draw.
+            let end = NSRange(location: storage.length, length: 0)
+            let attributes = CodeBlock.attributes()
+            guard textView.shouldChangeText(in: end, replacementString: "\n") else { return }
+            storage.replaceCharacters(in: end, with: NSAttributedString(string: "\n", attributes: attributes))
+            textView.setSelectedRange(end)
+            textView.typingAttributes = attributes
+            textView.didChangeText()
+            textView.needsDisplay = true
+            return
+        }
+
+        let location = min(selection.location, storage.length - 1)
+        let paragraphs = nsString.paragraphRange(
+            for: NSRange(location: location, length: min(selection.length, storage.length - location))
+        )
+        let makeCode = !paragraphStarts(in: storage.string, selection: paragraphs)
+            .allSatisfy { CodeBlock.isCodeLine(in: storage, at: $0) }
+        let attributes = makeCode ? CodeBlock.attributes() : CodeBlock.bodyAttributes()
+        guard textView.shouldChangeText(in: paragraphs, replacementString: nil) else { return }
+        let savedSelection = textView.selectedRanges
+        storage.beginEditing()
+        storage.removeAttribute(.backgroundColor, range: paragraphs)
+        storage.addAttributes(attributes, range: paragraphs)
+        storage.endEditing()
+        textView.selectedRanges = savedSelection
+        textView.typingAttributes = attributes
+        textView.didChangeText()
+        textView.needsDisplay = true
+    }
+
+    static func isCodeBlock(in textView: NSTextView) -> Bool {
+        guard let storage = textView.textStorage, !isAtEmptyLastLine(textView) else { return false }
+        return CodeBlock.isCodeLine(in: storage, at: min(textView.selectedRange().location, storage.length - 1))
+    }
+
+    /// Code lines always end with their own newline, so the empty line after a block at the
+    /// end of the note is plain text. Clicking there must not keep typing in code style.
+    static func leaveCodeStyleOnEmptyLastLine(in textView: NSTextView) {
+        guard isAtEmptyLastLine(textView),
+              CodeBlock.isCodeStyle(textView.typingAttributes[.paragraphStyle] as? NSParagraphStyle) else { return }
+        textView.typingAttributes = CodeBlock.bodyAttributes()
+    }
+
+    private static func isAtEmptyLastLine(_ textView: NSTextView) -> Bool {
+        guard let storage = textView.textStorage else { return false }
+        let selection = textView.selectedRange()
+        return selection.length == 0 && selection.location >= storage.length
+            && (storage.length == 0 || (storage.string as NSString).character(at: storage.length - 1) == 0x0A)
+    }
+
+    /// Return in code: a fence line ("```") starts a code block, Return inside one adds a code line
+    /// (empty lines included), and Return on a closing fence ends the block.
+    /// Returns nil when the cursor is not in a code block or on a fence.
+    private static func handleCodeNewline(in textView: NSTextView, selection: NSRange) -> Bool? {
+        guard let storage = textView.textStorage else { return nil }
+        let nsString = storage.string as NSString
+        let atEmptyLastLine = selection.location == storage.length
+            && (storage.length == 0 || nsString.character(at: storage.length - 1) == 0x0A)
+        let paragraph = atEmptyLastLine
+            ? NSRange(location: storage.length, length: 0)
+            : nsString.paragraphRange(for: NSRange(location: min(selection.location, storage.length - 1), length: 0))
+        let hasNewline = paragraph.length > 0 && nsString.character(at: NSMaxRange(paragraph) - 1) == 0x0A
+        let content = NSRange(location: paragraph.location, length: paragraph.length - (hasNewline ? 1 : 0))
+        let line = nsString.substring(with: content)
+        let isCode = !atEmptyLastLine && CodeBlock.isCodeLine(in: storage, at: paragraph.location)
+
+        /// Replaces the whole line with an empty one in the given style and puts the cursor on it.
+        func resetLine(to attributes: [NSAttributedString.Key: Any]) -> Bool {
+            let replacement = hasNewline ? "\n" : ""
+            if paragraph.length > 0 {
+                guard textView.shouldChangeText(in: paragraph, replacementString: replacement) else { return true }
+                storage.replaceCharacters(in: paragraph, with: NSAttributedString(string: replacement, attributes: attributes))
+            }
+            textView.setSelectedRange(NSRange(location: paragraph.location, length: 0))
+            textView.typingAttributes = attributes
+            if paragraph.length > 0 { textView.didChangeText() }
+            textView.needsDisplay = true
+            return true
+        }
+
+        if isCode {
+            if CodeBlock.isFence(line) {
+                return resetLine(to: CodeBlock.bodyAttributes())
+            }
+            let attributes = CodeBlock.attributes()
+            guard textView.shouldChangeText(in: selection, replacementString: "\n") else { return true }
+            storage.replaceCharacters(in: selection, with: NSAttributedString(string: "\n", attributes: attributes))
+            textView.setSelectedRange(NSRange(location: selection.location + 1, length: 0))
+            textView.typingAttributes = attributes
+            textView.didChangeText()
+            return true
+        }
+
+        guard CodeBlock.isFence(line), selection.location == NSMaxRange(content) else { return nil }
+        if hasNewline { return resetLine(to: CodeBlock.attributes()) }
+        // At the end of the note, keep a real newline so the block has a line to draw.
+        let attributes = CodeBlock.attributes()
+        guard textView.shouldChangeText(in: paragraph, replacementString: "\n") else { return true }
+        storage.replaceCharacters(in: paragraph, with: NSAttributedString(string: "\n", attributes: attributes))
+        textView.setSelectedRange(NSRange(location: paragraph.location, length: 0))
+        textView.typingAttributes = attributes
+        textView.didChangeText()
+        textView.needsDisplay = true
+        return true
+    }
+
+    /// Backspace at the start of a code block's first line turns that line back into plain text.
+    static func handleCodeBackspace(in textView: NSTextView) -> Bool {
+        guard let storage = textView.textStorage else { return false }
+        let selection = textView.selectedRange()
+        guard selection.length == 0, CodeBlock.isCodeLine(in: storage, at: selection.location) else { return false }
+        let nsString = storage.string as NSString
+        let paragraph = nsString.paragraphRange(for: NSRange(location: selection.location, length: 0))
+        guard paragraph.location == selection.location else { return false }
+        if paragraph.location > 0,
+           CodeBlock.isCodeLine(in: storage, at: nsString.paragraphRange(for: NSRange(location: paragraph.location - 1, length: 0)).location) {
+            return false
+        }
+        guard textView.shouldChangeText(in: paragraph, replacementString: nil) else { return true }
+        storage.beginEditing()
+        storage.addAttributes(CodeBlock.bodyAttributes(), range: paragraph)
+        storage.endEditing()
+        textView.typingAttributes = CodeBlock.bodyAttributes()
+        textView.didChangeText()
+        textView.needsDisplay = true
         return true
     }
 

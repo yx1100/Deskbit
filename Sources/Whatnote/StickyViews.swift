@@ -10,6 +10,7 @@ protocol StickyToolbarDelegate: AnyObject {
     func didTapOrderedList()
     func didTapTodo()
     func didTapDivider()
+    func didTapCodeBlock()
     func didTapLink()
     func didTapImage()
     func didTapNew()
@@ -114,9 +115,12 @@ final class StickyFormattingFooterView: NSView {
     private let orderedButton: NoteToolButton
     private let todoButton: NoteToolButton
     private let dividerButton: NoteToolButton
+    private let codeButton: NoteToolButton
     private let imageButton: NoteToolButton
 
-    private var buttons: [NoteToolButton] { [boldButton, bulletButton, orderedButton, todoButton, dividerButton, imageButton] }
+    private var buttons: [NoteToolButton] {
+        [boldButton, bulletButton, orderedButton, todoButton, dividerButton, codeButton, imageButton]
+    }
 
     override init(frame frameRect: NSRect) {
         boldButton = NoteToolButton(
@@ -146,6 +150,14 @@ final class StickyFormattingFooterView: NSView {
             tip: "分隔线",
             action: #selector(StickyFormattingFooterView.insertDivider)
         )
+        codeButton = NoteToolButton(
+            symbol: "chevron.left.forwardslash.chevron.right",
+            fallbackSymbol: "curlybraces",
+            tip: "代码块",
+            // The wide </> glyph looks larger than the other icons at 13 pt.
+            pointSize: 11,
+            action: #selector(StickyFormattingFooterView.toggleCodeBlock)
+        )
         imageButton = NoteToolButton(
             symbol: "photo",
             tip: "插入图片",
@@ -167,8 +179,9 @@ final class StickyFormattingFooterView: NSView {
 
     required init?(coder: NSCoder) { nil }
 
-    func updateFormatting(isBold: Bool, isBulletList: Bool, isOrderedList: Bool, isTodoItem: Bool) {
+    func updateFormatting(isBold: Bool, isBulletList: Bool, isOrderedList: Bool, isTodoItem: Bool, isCodeBlock: Bool = false) {
         boldButton.isActive = isBold
+        codeButton.isActive = isCodeBlock
         bulletButton.isActive = isBulletList
         orderedButton.isActive = isOrderedList
         todoButton.isActive = isTodoItem
@@ -183,6 +196,7 @@ final class StickyFormattingFooterView: NSView {
     @objc private func toggleOrdered() { delegate?.didTapOrderedList() }
     @objc private func toggleTodo() { delegate?.didTapTodo() }
     @objc private func insertDivider() { delegate?.didTapDivider() }
+    @objc private func toggleCodeBlock() { delegate?.didTapCodeBlock() }
     @objc private func insertImage() { delegate?.didTapImage() }
 }
 
@@ -215,6 +229,9 @@ final class StickyTextView: NSTextView {
     var onAdjustBulletLevel: ((Int) -> Bool)?
     /// Returns true when it handled the key, e.g. removed a whole to-do marker.
     var onDeleteBackward: (() -> Bool)?
+    /// Closes the note, like the 完成 button; used by ⌘W and pressing Esc twice.
+    var onCloseNote: (() -> Void)?
+    private var lastEscapeTimestamp: TimeInterval?
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
@@ -285,6 +302,10 @@ final class StickyTextView: NSTextView {
             onEditLink?()
             return true
         }
+        if modifiers == [.command], key == "w", ClosePreferences.closesOnCommandW() {
+            onCloseNote?()
+            return true
+        }
         if let command = StickyEditingShortcut.command(for: modifiers, key: key) {
             switch command {
             case .copy: copy(nil)
@@ -295,6 +316,43 @@ final class StickyTextView: NSTextView {
             return true
         }
         return super.performKeyEquivalent(with: event)
+    }
+
+    override func keyDown(with event: NSEvent) {
+        if event.keyCode == 53, handleEscape(event) { return } // 53: Esc
+        super.keyDown(with: event)
+    }
+
+    /// Two presses of Esc in quick succession close the note. Esc still cancels input-method
+    /// composition, and a single press does nothing else in a note.
+    private func handleEscape(_ event: NSEvent) -> Bool {
+        let modifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
+        guard modifiers.isEmpty, !hasMarkedText(), ClosePreferences.closesOnDoubleEscape() else { return false }
+        if event.isARepeat { return true }
+        if let last = lastEscapeTimestamp, event.timestamp - last <= NSEvent.doubleClickInterval {
+            lastEscapeTimestamp = nil
+            onCloseNote?()
+        } else {
+            lastEscapeTimestamp = event.timestamp
+        }
+        return true
+    }
+
+    /// The first line of a code block holds padding above its text; keep the caret to the text.
+    override func drawInsertionPoint(in rect: NSRect, color: NSColor, turnedOn flag: Bool) {
+        super.drawInsertionPoint(in: caretRect(from: rect), color: color, turnedOn: flag)
+    }
+
+    private func caretRect(from rect: NSRect) -> NSRect {
+        guard let storage = textStorage, let layoutManager, storage.length > 0 else { return rect }
+        let location = selectedRange().location
+        guard location < storage.length else { return rect }
+        let paragraphStart = (storage.string as NSString).paragraphRange(for: NSRange(location: location, length: 0)).location
+        guard CodeBlock.isFirstLine(in: storage, at: paragraphStart) else { return rect }
+        let caretLine = layoutManager.lineFragmentRect(forGlyphAt: layoutManager.glyphIndexForCharacter(at: location), effectiveRange: nil)
+        let firstLine = layoutManager.lineFragmentRect(forGlyphAt: layoutManager.glyphIndexForCharacter(at: paragraphStart), effectiveRange: nil)
+        guard caretLine.minY == firstLine.minY, rect.height > CodeBlock.verticalPadding else { return rect }
+        return NSRect(x: rect.minX, y: rect.minY + CodeBlock.verticalPadding, width: rect.width, height: rect.height - CodeBlock.verticalPadding)
     }
 
     override func insertNewline(_ sender: Any?) {
@@ -374,6 +432,14 @@ final class StickyTextView: NSTextView {
     }
 }
 
+/// A scroller without the white track that "always show scroll bars" draws, so the note's
+/// color shows behind the knob.
+final class NoteScroller: NSScroller {
+    override class var isCompatibleWithOverlayScrollers: Bool { true }
+
+    override func drawKnobSlot(in slotRect: NSRect, highlight flag: Bool) {}
+}
+
 /// A note: colored paper whose text scrolls underneath two floating glass bars.
 final class StickyRootView: NSView {
     let toolbar: StickyToolbarView
@@ -395,6 +461,7 @@ final class StickyRootView: NSView {
 
         scrollView.drawsBackground = false
         scrollView.hasVerticalScroller = true
+        scrollView.verticalScroller = NoteScroller()
         scrollView.autohidesScrollers = true
         scrollView.borderType = .noBorder
         scrollView.translatesAutoresizingMaskIntoConstraints = false

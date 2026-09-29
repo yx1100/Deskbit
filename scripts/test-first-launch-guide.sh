@@ -9,6 +9,7 @@ swiftc \
   "$project_dir/Sources/Whatnote/NoteAppearance.swift" \
   "$project_dir/Sources/Whatnote/FirstLaunchGuide.swift" \
   "$project_dir/Sources/Whatnote/TodoCheckbox.swift" \
+  "$project_dir/Sources/Whatnote/CodeBlock.swift" \
   "$project_dir/Tests/FirstLaunchGuideProbe.swift" \
   -o "$probe_binary"
 
