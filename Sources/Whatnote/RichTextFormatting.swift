@@ -369,22 +369,59 @@ enum RichTextFormatting {
         setTypingTodoCompletion(false, textView: textView)
     }
 
-    /// Keeps the cursor off divider lines. A divider is "---" drawn as a line, so a cursor
-    /// placed between its dashes would sit in the middle of the line. Moving backwards lands at
-    /// the end of the line above; clicks and other moves land at the start of the line below.
-    static func selectionAvoidingDividers(_ proposed: NSRange, from old: NSRange, in textView: NSTextView) -> NSRange {
-        guard proposed.length == 0, let storage = textView.textStorage, proposed.location < storage.length else { return proposed }
-        let string = storage.string as NSString
-        let paragraph = string.paragraphRange(for: NSRange(location: proposed.location, length: 0))
-        // A divider still being typed at the very end of the note has no line below yet.
-        guard string.character(at: NSMaxRange(paragraph) - 1) == 0x0A,
-              DividerLine.isDivider(string.substring(with: NSRange(location: paragraph.location, length: paragraph.length - 1))),
-              !CodeBlock.isCodeLine(in: storage, at: paragraph.location) else { return proposed }
-        let isMouse = NSApp?.currentEvent.map { [.leftMouseDown, .leftMouseDragged, .leftMouseUp].contains($0.type) } ?? false
-        if !isMouse, proposed.location < old.location, paragraph.location > 0 {
-            return NSRange(location: paragraph.location - 1, length: 0)
+    /// A divider is "---" drawn as a line, so the cursor may only sit at its left end; a click or
+    /// arrow key that lands among the dashes moves there instead. Pressing → at the left end
+    /// moves on to the next line. `isUserMove` is false while typing, so "---" can be typed.
+    static func selectionAvoidingDividers(
+        _ proposed: NSRange,
+        from old: NSRange,
+        isUserMove: Bool,
+        in textView: NSTextView
+    ) -> NSRange {
+        guard isUserMove, proposed.length == 0, let storage = textView.textStorage,
+              proposed.location < storage.length,
+              let divider = dividerParagraph(containing: proposed.location, in: storage),
+              proposed.location > divider.location else { return proposed }
+        let hasNewline = (storage.string as NSString).character(at: NSMaxRange(divider) - 1) == 0x0A
+        if old.length == 0, old.location == divider.location, proposed.location > old.location, hasNewline {
+            return NSRange(location: NSMaxRange(divider), length: 0)
         }
-        return NSRange(location: NSMaxRange(paragraph), length: 0)
+        return NSRange(location: divider.location, length: 0)
+    }
+
+    /// Backspace at a divider's left end, or at the start of the line below it, deletes the whole
+    /// divider instead of one dash or the line break.
+    static func handleDividerBackspace(in textView: NSTextView) -> Bool {
+        guard let storage = textView.textStorage else { return false }
+        let selection = textView.selectedRange()
+        guard selection.length == 0 else { return false }
+        let string = storage.string as NSString
+        var divider: NSRange?
+        if let paragraph = dividerParagraph(containing: selection.location, in: storage),
+           paragraph.location == selection.location {
+            divider = paragraph
+        } else if selection.location > 0, string.character(at: selection.location - 1) == 0x0A {
+            divider = dividerParagraph(containing: selection.location - 1, in: storage)
+        }
+        guard let divider else { return false }
+        guard textView.shouldChangeText(in: divider, replacementString: "") else { return true }
+        storage.replaceCharacters(in: divider, with: "")
+        textView.setSelectedRange(NSRange(location: divider.location, length: 0))
+        textView.didChangeText()
+        return true
+    }
+
+    /// The whole paragraph (with its line break) when the one at `location` is a divider.
+    private static func dividerParagraph(containing location: Int, in storage: NSTextStorage) -> NSRange? {
+        let string = storage.string as NSString
+        guard location >= 0, location < string.length,
+              !CodeBlock.isCodeLine(in: storage, at: location) else { return nil }
+        let paragraph = string.paragraphRange(for: NSRange(location: location, length: 0))
+        var content = paragraph
+        while content.length > 0, [0x0A, 0x0D, 0x2029].contains(string.character(at: NSMaxRange(content) - 1)) {
+            content.length -= 1
+        }
+        return DividerLine.isDivider(string.substring(with: content)) ? paragraph : nil
     }
 
     /// Puts a "---" divider on its own line at the cursor and moves the cursor below it.

@@ -53,7 +53,8 @@ final class StickyWindowController: NSWindowController, NSWindowDelegate, NSText
         }
         rootView.textView.onDeleteBackward = { [weak self] in
             guard let self else { return false }
-            return RichTextFormatting.handleCodeBackspace(in: self.rootView.textView)
+            return RichTextFormatting.handleDividerBackspace(in: self.rootView.textView)
+                || RichTextFormatting.handleCodeBackspace(in: self.rootView.textView)
                 || RichTextFormatting.handleMarkerBackspace(in: self.rootView.textView)
         }
         rootView.textView.onCloseNote = { [weak self] in self?.didTapComplete() }
@@ -136,7 +137,17 @@ final class StickyWindowController: NSWindowController, NSWindowDelegate, NSText
         willChangeSelectionFromCharacterRange oldSelectedCharRange: NSRange,
         toCharacterRange newSelectedCharRange: NSRange
     ) -> NSRange {
-        RichTextFormatting.selectionAvoidingDividers(newSelectedCharRange, from: oldSelectedCharRange, in: textView)
+        // Clicks and arrow keys, not typing, which also moves the selection.
+        let isUserMove = NSApp.currentEvent.map { event in
+            [.leftMouseDown, .leftMouseDragged, .leftMouseUp].contains(event.type)
+                || (event.type == .keyDown && (123...126).contains(event.keyCode)) // arrow keys
+        } ?? false
+        return RichTextFormatting.selectionAvoidingDividers(
+            newSelectedCharRange,
+            from: oldSelectedCharRange,
+            isUserMove: isUserMove,
+            in: textView
+        )
     }
 
     func textViewDidChangeSelection(_ notification: Notification) {

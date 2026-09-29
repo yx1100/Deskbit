@@ -484,25 +484,36 @@ struct RichTextProbe {
         let codeButton = codeButtonOn && codeButtonOff && emptyCodeStarted
         print("codeButton on=\(codeButtonOn) off=\(codeButtonOff) empty=\(emptyCodeStarted)")
 
-        // The cursor never rests on a divider line.
+        // The cursor rests only at a divider's left end; Backspace next to it deletes the whole divider.
         let dividerCursorEditor = NSTextView()
         dividerCursorEditor.isRichText = true
         dividerCursorEditor.string = "上\n---\n下"
-        let clickedDivider = RichTextFormatting.selectionAvoidingDividers(
-            NSRange(location: 3, length: 0), from: NSRange(location: 0, length: 0), in: dividerCursorEditor
-        ) == NSRange(location: 6, length: 0)
-        let backIntoDivider = RichTextFormatting.selectionAvoidingDividers(
-            NSRange(location: 5, length: 0), from: NSRange(location: 6, length: 0), in: dividerCursorEditor
-        ) == NSRange(location: 1, length: 0)
-        let plainLineUntouched = RichTextFormatting.selectionAvoidingDividers(
-            NSRange(location: 7, length: 0), from: NSRange(location: 0, length: 0), in: dividerCursorEditor
-        ) == NSRange(location: 7, length: 0)
-        dividerCursorEditor.string = "上\n---"
-        let typingDividerUntouched = RichTextFormatting.selectionAvoidingDividers(
-            NSRange(location: 5, length: 0), from: NSRange(location: 4, length: 0), in: dividerCursorEditor
-        ) == NSRange(location: 5, length: 0)
-        let dividerCursor = clickedDivider && backIntoDivider && plainLineUntouched && typingDividerUntouched
-        print("dividerCursor click=\(clickedDivider) back=\(backIntoDivider) plain=\(plainLineUntouched) typing=\(typingDividerUntouched)")
+        func snapped(_ location: Int, from old: Int, userMove: Bool = true) -> Int {
+            RichTextFormatting.selectionAvoidingDividers(
+                NSRange(location: location, length: 0),
+                from: NSRange(location: old, length: 0),
+                isUserMove: userMove,
+                in: dividerCursorEditor
+            ).location
+        }
+        let clickedDivider = snapped(3, from: 0) == 2 && snapped(4, from: 7) == 2
+        let backIntoDivider = snapped(5, from: 6) == 2
+        let rightFromDivider = snapped(3, from: 2) == 6
+        let plainLineUntouched = snapped(7, from: 0) == 7 && snapped(2, from: 0) == 2
+        let typingDividerUntouched = snapped(5, from: 4, userMove: false) == 5
+        dividerCursorEditor.setSelectedRange(NSRange(location: 6, length: 0))
+        let backspaceBelow = RichTextFormatting.handleDividerBackspace(in: dividerCursorEditor)
+            && dividerCursorEditor.string == "上\n下"
+            && dividerCursorEditor.selectedRange().location == 2
+        dividerCursorEditor.string = "上\n---\n下"
+        dividerCursorEditor.setSelectedRange(NSRange(location: 2, length: 0))
+        let backspaceAtDivider = RichTextFormatting.handleDividerBackspace(in: dividerCursorEditor)
+            && dividerCursorEditor.string == "上\n下"
+        dividerCursorEditor.setSelectedRange(NSRange(location: 3, length: 0))
+        let ordinaryBackspaceIgnored = !RichTextFormatting.handleDividerBackspace(in: dividerCursorEditor)
+        let dividerCursor = clickedDivider && backIntoDivider && rightFromDivider && plainLineUntouched
+            && typingDividerUntouched && backspaceBelow && backspaceAtDivider && ordinaryBackspaceIgnored
+        print("dividerCursor click=\(clickedDivider) back=\(backIntoDivider) right=\(rightFromDivider) plain=\(plainLineUntouched) typing=\(typingDividerUntouched) backspaceBelow=\(backspaceBelow) backspaceAt=\(backspaceAtDivider) ordinary=\(ordinaryBackspaceIgnored)")
 
         let codeBlocks = dividerCursor && codeButton && trailingLinePlain && fenceStarted && codeKeepsMarkdown && codeContinues && codeEnds && codeRoundTrip && codeBackspace && pastedCode
         print("codeBlock start=\(fenceStarted) keepsMarkdown=\(codeKeepsMarkdown) continues=\(codeContinues) ends=\(codeEnds) roundTrip=\(codeRoundTrip) backspace=\(codeBackspace) pasted=\(pastedCode)")
