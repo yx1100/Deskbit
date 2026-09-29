@@ -23,6 +23,51 @@ enum TodoMarker {
     }
 }
 
+/// A paragraph holding only "---", "***" or "___" (three or more) is a Markdown divider.
+/// The text stays in the note and is drawn as a thin horizontal line.
+enum DividerLine {
+    static let marker = "---"
+    private static let expression = try? NSRegularExpression(pattern: #"^(?:-{3,}|\*{3,}|_{3,})$"#)
+
+    /// Whether the paragraph content (without its line break) is a divider.
+    static func isDivider(_ content: String) -> Bool {
+        guard let expression else { return false }
+        let range = NSRange(location: 0, length: (content as NSString).length)
+        return expression.firstMatch(in: content, range: range) != nil
+    }
+
+    /// Divider paragraphs overlapping `range`, without their line breaks.
+    static func ranges(in string: NSString, overlapping range: NSRange) -> [NSRange] {
+        guard string.length > 0 else { return [] }
+        let location = min(range.location, string.length - 1)
+        let span = string.paragraphRange(for: NSRange(location: location, length: min(range.length, string.length - location)))
+        var result: [NSRange] = []
+        var cursor = span.location
+        while cursor < NSMaxRange(span) {
+            let paragraph = string.paragraphRange(for: NSRange(location: cursor, length: 0))
+            var content = paragraph
+            while content.length > 0,
+                  [0x0A, 0x0D, 0x2029].contains(string.character(at: NSMaxRange(content) - 1)) {
+                content.length -= 1
+            }
+            if content.length > 0, isDivider(string.substring(with: content)) { result.append(content) }
+            guard NSMaxRange(paragraph) > cursor else { break }
+            cursor = NSMaxRange(paragraph)
+        }
+        return result
+    }
+
+    static func draw(in lineRect: NSRect) {
+        let y = lineRect.midY.rounded() + 0.5
+        let line = NSBezierPath()
+        line.move(to: NSPoint(x: lineRect.minX + 2, y: y))
+        line.line(to: NSPoint(x: lineRect.maxX - 2, y: y))
+        line.lineWidth = 1
+        NSColor.black.withAlphaComponent(0.22).setStroke()
+        line.stroke()
+    }
+}
+
 enum TodoCheckbox {
     static func diameter(for font: NSFont) -> CGFloat {
         min(20, (font.pointSize * 0.9).rounded())
@@ -80,7 +125,8 @@ enum TodoCheckbox {
     }
 }
 
-/// Draws to-do markers as round checkboxes in place of the ☐ / ☑ glyphs.
+/// Draws to-do markers as round checkboxes in place of the ☐ / ☑ glyphs,
+/// and "---" paragraphs as divider lines.
 /// The marker glyph is laid out as fixed-width whitespace, so the gap between
 /// the circle and the text does not depend on which font happens to draw ☐.
 final class NoteLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
@@ -176,27 +222,48 @@ final class NoteLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
             super.drawGlyphs(forGlyphRange: glyphsToShow, at: origin)
             return
         }
-        let markers = todoMarkers(in: glyphsToShow, string: storage.string as NSString)
-        guard !markers.isEmpty else {
+        let string = storage.string as NSString
+        // Glyph ranges drawn by hand instead of as text, in order.
+        var replaced: [(glyphs: NSRange, draw: () -> Void)] = todoMarkers(in: glyphsToShow, string: string).map { marker in
+            (NSRange(location: marker.glyph, length: 1), {
+                let box = TodoCheckbox.rect(forGlyphAt: marker.glyph, layoutManager: self)
+                TodoCheckbox.draw(
+                    isCompleted: marker.isCompleted,
+                    in: box.offsetBy(dx: origin.x, dy: origin.y),
+                    accent: self.checkboxAccent
+                )
+            })
+        }
+        let characters = characterRange(forGlyphRange: glyphsToShow, actualGlyphRange: nil)
+        for divider in DividerLine.ranges(in: string, overlapping: characters) {
+            let glyphs = NSIntersectionRange(glyphRange(forCharacterRange: divider, actualCharacterRange: nil), glyphsToShow)
+            guard glyphs.length > 0 else { continue }
+            replaced.append((glyphs, {
+                let lineRect = self.lineFragmentUsedRect(forGlyphAt: glyphs.location, effectiveRange: nil)
+                let fullWidth = self.lineFragmentRect(forGlyphAt: glyphs.location, effectiveRange: nil)
+                let area = NSRect(x: fullWidth.minX + (self.textContainers.first?.lineFragmentPadding ?? 0),
+                                  y: lineRect.minY,
+                                  width: fullWidth.width - 2 * (self.textContainers.first?.lineFragmentPadding ?? 0),
+                                  height: lineRect.height)
+                DividerLine.draw(in: area.offsetBy(dx: origin.x, dy: origin.y))
+            }))
+        }
+        guard !replaced.isEmpty else {
             super.drawGlyphs(forGlyphRange: glyphsToShow, at: origin)
             return
         }
+        replaced.sort { $0.glyphs.location < $1.glyphs.location }
 
         var segmentStart = glyphsToShow.location
-        for marker in markers {
-            if marker.glyph > segmentStart {
+        for item in replaced {
+            if item.glyphs.location > segmentStart {
                 super.drawGlyphs(
-                    forGlyphRange: NSRange(location: segmentStart, length: marker.glyph - segmentStart),
+                    forGlyphRange: NSRange(location: segmentStart, length: item.glyphs.location - segmentStart),
                     at: origin
                 )
             }
-            let box = TodoCheckbox.rect(forGlyphAt: marker.glyph, layoutManager: self)
-            TodoCheckbox.draw(
-                isCompleted: marker.isCompleted,
-                in: box.offsetBy(dx: origin.x, dy: origin.y),
-                accent: checkboxAccent
-            )
-            segmentStart = marker.glyph + 1
+            item.draw()
+            segmentStart = max(segmentStart, NSMaxRange(item.glyphs))
         }
         let end = NSMaxRange(glyphsToShow)
         if end > segmentStart {

@@ -9,6 +9,7 @@ protocol StickyToolbarDelegate: AnyObject {
     func didTapBulletList()
     func didTapOrderedList()
     func didTapTodo()
+    func didTapDivider()
     func didTapLink()
     func didTapImage()
     func didTapNew()
@@ -17,7 +18,7 @@ protocol StickyToolbarDelegate: AnyObject {
 }
 
 /// The top strip is the drag handle. It holds three glass capsules:
-/// arrange on the left, colors and note actions on the right.
+/// complete on the left, colors and note actions (new, pin, arrange) on the right.
 final class StickyToolbarView: NSView {
     weak var delegate: StickyToolbarDelegate?
     private let arrangeButton: NoteToolButton
@@ -51,23 +52,23 @@ final class StickyToolbarView: NSView {
             button.action = #selector(selectColor(_:))
         }
 
-        let arrangeCapsule = GlassCapsuleView(views: [arrangeButton])
+        let leadingCapsule = GlassCapsuleView(views: [completeButton])
         let colorCapsule = GlassCapsuleView(views: colorButtons, horizontalPadding: 5)
-        let actionCapsule = GlassCapsuleView(views: [newButton, pinButton, completeButton])
-        for capsule in [arrangeCapsule, colorCapsule, actionCapsule] {
+        let actionCapsule = GlassCapsuleView(views: [newButton, pinButton, arrangeButton])
+        for capsule in [leadingCapsule, colorCapsule, actionCapsule] {
             addSubview(capsule)
         }
 
         let margin = NoteAppearance.barMargin
         NSLayoutConstraint.activate([
             heightAnchor.constraint(equalToConstant: NoteAppearance.topBarHeight),
-            arrangeCapsule.leadingAnchor.constraint(equalTo: leadingAnchor, constant: margin),
-            arrangeCapsule.topAnchor.constraint(equalTo: topAnchor, constant: margin),
+            leadingCapsule.leadingAnchor.constraint(equalTo: leadingAnchor, constant: margin),
+            leadingCapsule.topAnchor.constraint(equalTo: topAnchor, constant: margin),
             actionCapsule.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -margin),
             actionCapsule.topAnchor.constraint(equalTo: topAnchor, constant: margin),
             colorCapsule.trailingAnchor.constraint(equalTo: actionCapsule.leadingAnchor, constant: -6),
             colorCapsule.topAnchor.constraint(equalTo: topAnchor, constant: margin),
-            colorCapsule.leadingAnchor.constraint(greaterThanOrEqualTo: arrangeCapsule.trailingAnchor, constant: 6)
+            colorCapsule.leadingAnchor.constraint(greaterThanOrEqualTo: leadingCapsule.trailingAnchor, constant: 6)
         ])
         update(color: color, isPinned: isPinned)
     }
@@ -112,9 +113,10 @@ final class StickyFormattingFooterView: NSView {
     private let bulletButton: NoteToolButton
     private let orderedButton: NoteToolButton
     private let todoButton: NoteToolButton
+    private let dividerButton: NoteToolButton
     private let imageButton: NoteToolButton
 
-    private var buttons: [NoteToolButton] { [boldButton, bulletButton, orderedButton, todoButton, imageButton] }
+    private var buttons: [NoteToolButton] { [boldButton, bulletButton, orderedButton, todoButton, dividerButton, imageButton] }
 
     override init(frame frameRect: NSRect) {
         boldButton = NoteToolButton(
@@ -138,6 +140,11 @@ final class StickyFormattingFooterView: NSView {
             fallbackSymbol: "checkmark.circle",
             tip: "待办事项（⌘⇧X）",
             action: #selector(StickyFormattingFooterView.toggleTodo)
+        )
+        dividerButton = NoteToolButton(
+            symbol: "minus",
+            tip: "插入分割线（Markdown：---）",
+            action: #selector(StickyFormattingFooterView.insertDivider)
         )
         imageButton = NoteToolButton(
             symbol: "photo",
@@ -175,6 +182,7 @@ final class StickyFormattingFooterView: NSView {
     @objc private func toggleBullet() { delegate?.didTapBulletList() }
     @objc private func toggleOrdered() { delegate?.didTapOrderedList() }
     @objc private func toggleTodo() { delegate?.didTapTodo() }
+    @objc private func insertDivider() { delegate?.didTapDivider() }
     @objc private func insertImage() { delegate?.didTapImage() }
 }
 
@@ -399,6 +407,7 @@ final class StickyRootView: NSView {
         textView.textColor = NoteAppearance.textColor
         textView.drawsBackground = false
         textView.isAutomaticQuoteSubstitutionEnabled = false
+        textView.isAutomaticDashSubstitutionEnabled = false
         textView.textContainerInset = NSSize(width: 14, height: 2)
         textView.textContainer?.widthTracksTextView = true
         textView.autoresizingMask = [.width]

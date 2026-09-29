@@ -155,6 +155,12 @@ final class StickyWindowController: NSWindowController, NSWindowDelegate, NSText
         window?.makeFirstResponder(textView)
     }
 
+    func didTapDivider() {
+        let textView = rootView.textView
+        window?.makeFirstResponder(textView)
+        RichTextFormatting.insertDivider(in: textView)
+    }
+
     func didTapTodo() {
         let textView = rootView.textView
         RichTextFormatting.toggleTodo(in: textView)

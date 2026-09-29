@@ -341,6 +341,24 @@ enum RichTextFormatting {
         setTypingTodoCompletion(false, textView: textView)
     }
 
+    /// Puts a "---" divider on its own line at the cursor and moves the cursor below it.
+    static func insertDivider(in textView: NSTextView) {
+        guard let storage = textView.textStorage else { return }
+        let selection = textView.selectedRange()
+        let nsString = storage.string as NSString
+        let startsLine = selection.location == 0 || nsString.character(at: selection.location - 1) == 0x0A
+        let text = (startsLine ? "" : "\n") + "\(DividerLine.marker)\n"
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NoteAppearance.bodyFont(),
+            .foregroundColor: NoteAppearance.textColor
+        ]
+        guard textView.shouldChangeText(in: selection, replacementString: text) else { return }
+        storage.replaceCharacters(in: selection, with: NSAttributedString(string: text, attributes: attributes))
+        textView.setSelectedRange(NSRange(location: selection.location + (text as NSString).length, length: 0))
+        textView.typingAttributes = attributes
+        textView.didChangeText()
+    }
+
     static func isOrderedList(in textView: NSTextView) -> Bool {
         guard let storage = textView.textStorage else { return false }
         return paragraphStarts(in: storage.string, selection: textView.selectedRange()).first.map {

@@ -261,7 +261,27 @@ struct RichTextProbe {
         let orderedOff = orderedEditor.string == "买菜\n\n做饭"
         let orderedList = orderedOn && orderedContinues && orderedEmptyEnds && orderedBackspace && orderedMixed && orderedOff
 
-        let checkboxClicks = firstChecked && secondUnchecked && plainIgnored && buttonAdds && buttonRemoves && orderedList
+        // Dividers: "---" on its own line; the button puts one on its own line and moves below it.
+        let dividerPatterns = DividerLine.isDivider("---") && DividerLine.isDivider("*****") && DividerLine.isDivider("___")
+            && !DividerLine.isDivider("--") && !DividerLine.isDivider("--- 文字") && !DividerLine.isDivider("- - -")
+        let dividerEditor = NSTextView()
+        dividerEditor.isRichText = true
+        dividerEditor.string = "上文下文"
+        dividerEditor.setSelectedRange(NSRange(location: 2, length: 0))
+        RichTextFormatting.insertDivider(in: dividerEditor)
+        let dividerMidLine = dividerEditor.string == "上文\n---\n下文" && dividerEditor.selectedRange().location == 7
+        let dividerRanges = DividerLine.ranges(
+            in: dividerEditor.string as NSString,
+            overlapping: NSRange(location: 0, length: dividerEditor.string.utf16.count)
+        ) == [NSRange(location: 3, length: 3)]
+        let emptyDividerEditor = NSTextView()
+        emptyDividerEditor.isRichText = true
+        RichTextFormatting.insertDivider(in: emptyDividerEditor)
+        let dividerEmpty = emptyDividerEditor.string == "---\n"
+            && (emptyDividerEditor.textStorage?.attribute(.font, at: 0, effectiveRange: nil) as? NSFont)?.pointSize == NoteAppearance.bodyFontSize
+        let dividers = dividerPatterns && dividerMidLine && dividerRanges && dividerEmpty
+
+        let checkboxClicks = firstChecked && secondUnchecked && plainIgnored && buttonAdds && buttonRemoves && orderedList && dividers
             && todoBackspace && bulletBackspace && ordinaryBackspace && repaired
 
         let extendedMarkdown = strikeMarkdown && headingMarkdown && italicMarkdown && arithmeticUntouched
