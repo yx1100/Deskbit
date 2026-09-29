@@ -9,6 +9,7 @@ protocol StickyToolbarDelegate: AnyObject {
     func didTapBulletList()
     func didTapOrderedList()
     func didTapTodo()
+    func didTapDivider()
     func didTapLink()
     func didTapImage()
     func didTapNew()
@@ -17,7 +18,7 @@ protocol StickyToolbarDelegate: AnyObject {
 }
 
 /// The top strip is the drag handle. It holds three glass capsules:
-/// arrange on the left, colors and note actions on the right.
+/// complete on the left, colors and note actions (new, pin, arrange) on the right.
 final class StickyToolbarView: NSView {
     weak var delegate: StickyToolbarDelegate?
     private let arrangeButton: NoteToolButton
@@ -29,7 +30,7 @@ final class StickyToolbarView: NSView {
     init(color: NoteColor, isPinned: Bool) {
         arrangeButton = NoteToolButton(
             symbol: "rectangle.3.group",
-            tip: "自动排序便签",
+            tip: "排列便签",
             action: #selector(StickyToolbarView.arrangeNotes)
         )
         newButton = NoteToolButton(symbol: "plus", tip: "新建便签", action: #selector(StickyToolbarView.newNote))
@@ -51,23 +52,23 @@ final class StickyToolbarView: NSView {
             button.action = #selector(selectColor(_:))
         }
 
-        let arrangeCapsule = GlassCapsuleView(views: [arrangeButton])
+        let leadingCapsule = GlassCapsuleView(views: [completeButton])
         let colorCapsule = GlassCapsuleView(views: colorButtons, horizontalPadding: 5)
-        let actionCapsule = GlassCapsuleView(views: [newButton, pinButton, completeButton])
-        for capsule in [arrangeCapsule, colorCapsule, actionCapsule] {
+        let actionCapsule = GlassCapsuleView(views: [newButton, pinButton, arrangeButton])
+        for capsule in [leadingCapsule, colorCapsule, actionCapsule] {
             addSubview(capsule)
         }
 
         let margin = NoteAppearance.barMargin
         NSLayoutConstraint.activate([
             heightAnchor.constraint(equalToConstant: NoteAppearance.topBarHeight),
-            arrangeCapsule.leadingAnchor.constraint(equalTo: leadingAnchor, constant: margin),
-            arrangeCapsule.topAnchor.constraint(equalTo: topAnchor, constant: margin),
+            leadingCapsule.leadingAnchor.constraint(equalTo: leadingAnchor, constant: margin),
+            leadingCapsule.topAnchor.constraint(equalTo: topAnchor, constant: margin),
             actionCapsule.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -margin),
             actionCapsule.topAnchor.constraint(equalTo: topAnchor, constant: margin),
             colorCapsule.trailingAnchor.constraint(equalTo: actionCapsule.leadingAnchor, constant: -6),
             colorCapsule.topAnchor.constraint(equalTo: topAnchor, constant: margin),
-            colorCapsule.leadingAnchor.constraint(greaterThanOrEqualTo: arrangeCapsule.trailingAnchor, constant: 6)
+            colorCapsule.leadingAnchor.constraint(greaterThanOrEqualTo: leadingCapsule.trailingAnchor, constant: 6)
         ])
         update(color: color, isPinned: isPinned)
     }
@@ -112,36 +113,42 @@ final class StickyFormattingFooterView: NSView {
     private let bulletButton: NoteToolButton
     private let orderedButton: NoteToolButton
     private let todoButton: NoteToolButton
+    private let dividerButton: NoteToolButton
     private let imageButton: NoteToolButton
 
-    private var buttons: [NoteToolButton] { [boldButton, bulletButton, orderedButton, todoButton, imageButton] }
+    private var buttons: [NoteToolButton] { [boldButton, bulletButton, orderedButton, todoButton, dividerButton, imageButton] }
 
     override init(frame frameRect: NSRect) {
         boldButton = NoteToolButton(
             symbol: "bold",
-            tip: "加粗（⌘B）",
+            tip: "粗体（⌘B）",
             action: #selector(StickyFormattingFooterView.toggleBold)
         )
         bulletButton = NoteToolButton(
             symbol: "list.bullet",
-            tip: "项目符号（⌘⇧8；Tab / Shift+Tab 调整级别）",
+            tip: "项目符号列表（⇧⌘7）",
             action: #selector(StickyFormattingFooterView.toggleBullet)
         )
         orderedButton = NoteToolButton(
             symbol: "list.number",
             fallbackSymbol: "list.bullet",
-            tip: "编号列表（⌘⇧7）",
+            tip: "编号列表（⇧⌘9）",
             action: #selector(StickyFormattingFooterView.toggleOrdered)
         )
         todoButton = NoteToolButton(
             symbol: "checklist",
             fallbackSymbol: "checkmark.circle",
-            tip: "待办事项（⌘⇧X）",
+            tip: "核对清单（⇧⌘L）",
             action: #selector(StickyFormattingFooterView.toggleTodo)
+        )
+        dividerButton = NoteToolButton(
+            symbol: "minus",
+            tip: "分隔线",
+            action: #selector(StickyFormattingFooterView.insertDivider)
         )
         imageButton = NoteToolButton(
             symbol: "photo",
-            tip: "插入图片（也可直接粘贴或拖入）",
+            tip: "插入图片",
             action: #selector(StickyFormattingFooterView.insertImage)
         )
         super.init(frame: frameRect)
@@ -175,6 +182,7 @@ final class StickyFormattingFooterView: NSView {
     @objc private func toggleBullet() { delegate?.didTapBulletList() }
     @objc private func toggleOrdered() { delegate?.didTapOrderedList() }
     @objc private func toggleTodo() { delegate?.didTapTodo() }
+    @objc private func insertDivider() { delegate?.didTapDivider() }
     @objc private func insertImage() { delegate?.didTapImage() }
 }
 
@@ -195,6 +203,8 @@ enum StickyEditingShortcut: Equatable {
 
 final class StickyTextView: NSTextView {
     var onToggleBold: (() -> Void)?
+    var onToggleItalic: (() -> Void)?
+    var onToggleChecked: (() -> Void)?
     var onToggleBulletList: (() -> Void)?
     var onToggleOrderedList: (() -> Void)?
     var onToggleTodo: (() -> Void)?
@@ -248,18 +258,28 @@ final class StickyTextView: NSTextView {
             onToggleBold?()
             return true
         }
-        let isBulletShortcut = modifiers == [.command, .shift] && (key == "8" || key == "*")
-        if isBulletShortcut {
-            onToggleBulletList?()
+        if modifiers == [.command], key == "i" {
+            onToggleItalic?()
             return true
         }
-        if modifiers == [.command, .shift], key == "7" || key == "&" {
-            onToggleOrderedList?()
-            return true
-        }
-        if modifiers == [.command, .shift], key == "x" {
-            onToggleTodo?()
-            return true
+        // Apple Notes shortcuts: ⇧⌘7 bulleted list, ⇧⌘9 numbered list, ⇧⌘L checklist, ⇧⌘U mark as checked.
+        if modifiers == [.command, .shift] {
+            switch key {
+            case "7", "&":
+                onToggleBulletList?()
+                return true
+            case "9", "(":
+                onToggleOrderedList?()
+                return true
+            case "l":
+                onToggleTodo?()
+                return true
+            case "u":
+                onToggleChecked?()
+                return true
+            default:
+                break
+            }
         }
         if modifiers == [.command], key == "k" {
             onEditLink?()
@@ -399,6 +419,7 @@ final class StickyRootView: NSView {
         textView.textColor = NoteAppearance.textColor
         textView.drawsBackground = false
         textView.isAutomaticQuoteSubstitutionEnabled = false
+        textView.isAutomaticDashSubstitutionEnabled = false
         textView.textContainerInset = NSSize(width: 14, height: 2)
         textView.textContainer?.widthTracksTextView = true
         textView.autoresizingMask = [.width]

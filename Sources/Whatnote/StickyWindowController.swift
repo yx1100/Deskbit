@@ -26,6 +26,16 @@ final class StickyWindowController: NSWindowController, NSWindowDelegate, NSText
         rootView.footer.delegate = self
         rootView.textView.delegate = self
         rootView.textView.onToggleBold = { [weak self] in self?.didTapBold() }
+        rootView.textView.onToggleItalic = { [weak self] in
+            guard let self else { return }
+            RichTextFormatting.toggleItalic(in: self.rootView.textView)
+            self.rootView.textView.didChangeText()
+        }
+        rootView.textView.onToggleChecked = { [weak self] in
+            guard let self else { return }
+            RichTextFormatting.toggleCheckedState(in: self.rootView.textView)
+            self.updateFormattingState()
+        }
         rootView.textView.onToggleBulletList = { [weak self] in self?.didTapBulletList() }
         rootView.textView.onToggleOrderedList = { [weak self] in self?.didTapOrderedList() }
         rootView.textView.onToggleTodo = { [weak self] in self?.didTapTodo() }
@@ -153,6 +163,12 @@ final class StickyWindowController: NSWindowController, NSWindowDelegate, NSText
         RichTextFormatting.toggleOrderedList(in: textView)
         textView.didChangeText()
         window?.makeFirstResponder(textView)
+    }
+
+    func didTapDivider() {
+        let textView = rootView.textView
+        window?.makeFirstResponder(textView)
+        RichTextFormatting.insertDivider(in: textView)
     }
 
     func didTapTodo() {

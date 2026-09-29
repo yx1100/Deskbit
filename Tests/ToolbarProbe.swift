@@ -12,7 +12,7 @@ struct ToolbarProbe {
 
         let buttons = descendants(of: toolbar).compactMap { $0 as? NSButton }
         let labels = buttons.compactMap { $0.accessibilityLabel() }
-        let expected = ["自动排序便签", "蓝色", "绿色", "黄色", "粉色", "新建便签", "置顶", "完成"]
+        let expected = ["完成", "蓝色", "绿色", "黄色", "粉色", "新建便签", "置顶", "排列便签"]
         guard labels == expected else { exit(2) }
         guard descendants(of: toolbar).filter({ $0 is GlassCapsuleView }).count == 3 else { exit(1) }
 
@@ -25,7 +25,7 @@ struct ToolbarProbe {
                   $0.dotDiameter < selectedColor.dotDiameter && $0.ringWidth < selectedColor.ringWidth
               }) else { exit(4) }
 
-        guard let arrange = buttons.first(where: { $0.accessibilityLabel() == "自动排序便签" }) else { exit(5) }
+        guard let arrange = buttons.first(where: { $0.accessibilityLabel() == "排列便签" }) else { exit(5) }
         arrange.performClick(nil)
         guard delegate.arrangeCount == 1 else { exit(6) }
         guard !labels.contains("历史便签") else { exit(12) }
@@ -49,17 +49,20 @@ struct ToolbarProbe {
         footer.delegate = delegate
         let formattingButtons = descendants(of: footer).compactMap { $0 as? NoteToolButton }
         guard formattingButtons.compactMap({ $0.accessibilityLabel() }) == [
-            "加粗（⌘B）",
-            "项目符号（⌘⇧8；Tab / Shift+Tab 调整级别）",
-            "编号列表（⌘⇧7）",
-            "待办事项（⌘⇧X）",
-            "插入图片（也可直接粘贴或拖入）"
+            "粗体（⌘B）",
+            "项目符号列表（⇧⌘7）",
+            "编号列表（⇧⌘9）",
+            "核对清单（⇧⌘L）",
+            "分隔线",
+            "插入图片"
         ] else { exit(13) }
         formattingButtons[2].performClick(nil)
         formattingButtons[3].performClick(nil)
+        formattingButtons[4].performClick(nil)
+        guard delegate.dividerCount == 1 else { exit(21) }
         guard delegate.orderedCount == 1, delegate.todoCount == 1 else { exit(10) }
         footer.updateFormatting(isBold: true, isBulletList: false, isOrderedList: true, isTodoItem: false)
-        guard formattingButtons.map(\.isActive) == [true, false, true, false, false] else { exit(16) }
+        guard formattingButtons.map(\.isActive) == [true, false, true, false, false, false] else { exit(16) }
 
         // To-do markers are drawn as circles and toggle when clicked.
         var todoNote = StickyNote.fresh()
@@ -93,6 +96,7 @@ private final class ToolbarDelegateProbe: StickyToolbarDelegate {
     var arrangeCount = 0
     var todoCount = 0
     var orderedCount = 0
+    var dividerCount = 0
 
     func didChooseColor(_ color: NoteColor) {}
     func didTapArrange() { arrangeCount += 1 }
@@ -101,6 +105,7 @@ private final class ToolbarDelegateProbe: StickyToolbarDelegate {
     func didTapBulletList() {}
     func didTapOrderedList() { orderedCount += 1 }
     func didTapTodo() { todoCount += 1 }
+    func didTapDivider() { dividerCount += 1 }
     func didTapLink() {}
     func didTapImage() {}
     func didTapNew() {}

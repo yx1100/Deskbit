@@ -9,9 +9,18 @@ enum ApplicationMenu {
         let appMenu = NSMenu()
         appMenu.addItem(withTitle: "关于随便记", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
         appMenu.addItem(.separator())
+        // Sent up the responder chain to the app delegate.
+        appMenu.addItem(withTitle: "设置…", action: #selector(AppStatusMenuTarget.showPreferencesFromMenu), keyEquivalent: ",")
+        appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "退出随便记", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         appItem.submenu = appMenu
         mainMenu.addItem(appItem)
+
+        let fileItem = NSMenuItem(title: "文件", action: nil, keyEquivalent: "")
+        let fileMenu = NSMenu(title: "文件")
+        fileMenu.addItem(withTitle: "新建便签", action: #selector(AppStatusMenuTarget.newNoteFromMenu), keyEquivalent: "n")
+        fileItem.submenu = fileMenu
+        mainMenu.addItem(fileItem)
 
         addEditSubmenu(to: mainMenu)
 
@@ -30,7 +39,7 @@ enum ApplicationMenu {
         editMenu.addItem(command("重做", action: Selector(("redo:")), key: "z", modifiers: [.command, .shift]))
         editMenu.addItem(.separator())
         editMenu.addItem(command("剪切", action: #selector(NSText.cut(_:)), key: "x"))
-        editMenu.addItem(command("复制", action: #selector(NSText.copy(_:)), key: "c"))
+        editMenu.addItem(command("拷贝", action: #selector(NSText.copy(_:)), key: "c"))
         editMenu.addItem(command("粘贴", action: #selector(NSText.paste(_:)), key: "v"))
         editMenu.addItem(.separator())
         editMenu.addItem(command("全选", action: #selector(NSText.selectAll(_:)), key: "a"))

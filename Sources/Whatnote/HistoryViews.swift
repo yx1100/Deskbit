@@ -27,7 +27,7 @@ final class HistoryPopoverViewController: NSViewController {
         let root = NSView()
         root.translatesAutoresizingMaskIntoConstraints = false
 
-        let title = NSTextField(labelWithString: "历史便签")
+        let title = NSTextField(labelWithString: "已完成的便签")
         title.font = .systemFont(ofSize: 15, weight: .semibold)
         title.textColor = NSColor.labelColor
 
@@ -60,7 +60,7 @@ final class HistoryPopoverViewController: NSViewController {
         scrollView.documentView = document
 
         if notes.isEmpty {
-            let empty = NSTextField(labelWithString: "暂无历史便签")
+            let empty = NSTextField(labelWithString: "没有已完成的便签")
             empty.alignment = .center
             empty.font = .systemFont(ofSize: 13)
             empty.textColor = .tertiaryLabelColor
@@ -87,13 +87,13 @@ final class HistoryPopoverViewController: NSViewController {
             list.bottomAnchor.constraint(lessThanOrEqualTo: document.bottomAnchor, constant: -2)
         ])
 
-        let clearButton = NSButton(title: "清空历史", target: self, action: #selector(clearHistory))
+        let clearButton = NSButton(title: "全部删除", target: self, action: #selector(clearHistory))
         clearButton.bezelStyle = .inline
         clearButton.font = .systemFont(ofSize: 12)
         clearButton.contentTintColor = .systemRed
         clearButton.isEnabled = !notes.isEmpty
         clearButton.translatesAutoresizingMaskIntoConstraints = false
-        clearButton.setAccessibilityLabel("清空历史便签")
+        clearButton.setAccessibilityLabel("删除所有已完成的便签")
         root.addSubview(clearButton)
 
         NSLayoutConstraint.activate([
@@ -169,13 +169,13 @@ private final class HistoryNoteRowView: NSView {
         restore.translatesAutoresizingMaskIntoConstraints = false
         addSubview(restore)
 
-        let trashImage = NSImage(systemSymbolName: "trash", accessibilityDescription: "永久删除便签")
+        let trashImage = NSImage(systemSymbolName: "trash", accessibilityDescription: "删除便签")
         let delete = NSButton(image: trashImage ?? NSImage(), target: self, action: #selector(deleteNote))
         delete.isBordered = false
         delete.imagePosition = .imageOnly
         delete.contentTintColor = NSColor.systemRed.withAlphaComponent(0.74)
-        delete.toolTip = "永久删除"
-        delete.setAccessibilityLabel("永久删除便签")
+        delete.toolTip = "删除"
+        delete.setAccessibilityLabel("删除便签")
         delete.translatesAutoresizingMaskIntoConstraints = false
         addSubview(delete)
 

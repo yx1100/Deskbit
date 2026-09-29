@@ -9,6 +9,7 @@ swiftc \
   "$project_dir/Sources/Whatnote/NoteAppearance.swift" \
   "$project_dir/Sources/Whatnote/RichTextCodec.swift" \
   "$project_dir/Sources/Whatnote/NoteMedia.swift" \
+  "$project_dir/Sources/Whatnote/TodoCheckbox.swift" \
   "$project_dir/Sources/Whatnote/RichTextFormatting.swift" \
   "$project_dir/Tests/RichTextProbe.swift" \
   -o "$probe_binary"

@@ -75,6 +75,7 @@ struct RichTextProbe {
             && RichTextFormatting.todoState(in: todoEditor) == .plain
             && todoEditor.textStorage?.attribute(.strikethroughStyle, at: 0, effectiveRange: nil) == nil
         let todoSelectionPreserved = todoEditor.selectedRange() == NSRange(location: 0, length: todoEditor.string.utf16.count)
+        print("todo parts: pending=\(todoPending) completed=\(todoCompleted) survived=\(todoSurvived) removed=\(todoRemoved) selection=\(todoSelectionPreserved) \(todoEditor.selectedRange())")
 
         let completedTodoNewlineEditor = NSTextView()
         completedTodoNewlineEditor.isRichText = true
@@ -108,6 +109,7 @@ struct RichTextProbe {
             && splitCompletedTodoEditor.string == "☑ 前\n☐ 后"
             && splitCompletedTodoEditor.textStorage?.attribute(.strikethroughStyle, at: 2, effectiveRange: nil) != nil
             && splitCompletedTodoEditor.textStorage?.attribute(.strikethroughStyle, at: 6, effectiveRange: nil) == nil
+        print("todo newline parts: continued=\(completedTodoNewline) split=\(splitCompletedTodo) strings=\(completedTodoNewlineEditor.string.debugDescription) \(splitCompletedTodoEditor.string.debugDescription)")
 
         let bulletEditor = NSTextView()
         bulletEditor.isRichText = true
@@ -261,7 +263,47 @@ struct RichTextProbe {
         let orderedOff = orderedEditor.string == "买菜\n\n做饭"
         let orderedList = orderedOn && orderedContinues && orderedEmptyEnds && orderedBackspace && orderedMixed && orderedOff
 
-        let checkboxClicks = firstChecked && secondUnchecked && plainIgnored && buttonAdds && buttonRemoves && orderedList
+        // Dividers: "---" on its own line; the button puts one on its own line and moves below it.
+        let dividerPatterns = DividerLine.isDivider("---") && DividerLine.isDivider("*****") && DividerLine.isDivider("___")
+            && !DividerLine.isDivider("--") && !DividerLine.isDivider("--- 文字") && !DividerLine.isDivider("- - -")
+        let dividerEditor = NSTextView()
+        dividerEditor.isRichText = true
+        dividerEditor.string = "上文下文"
+        dividerEditor.setSelectedRange(NSRange(location: 2, length: 0))
+        RichTextFormatting.insertDivider(in: dividerEditor)
+        let dividerMidLine = dividerEditor.string == "上文\n---\n下文" && dividerEditor.selectedRange().location == 7
+        let dividerRanges = DividerLine.ranges(
+            in: dividerEditor.string as NSString,
+            overlapping: NSRange(location: 0, length: dividerEditor.string.utf16.count)
+        ) == [NSRange(location: 3, length: 3)]
+        let emptyDividerEditor = NSTextView()
+        emptyDividerEditor.isRichText = true
+        RichTextFormatting.insertDivider(in: emptyDividerEditor)
+        let dividerEmpty = emptyDividerEditor.string == "---\n"
+            && (emptyDividerEditor.textStorage?.attribute(.font, at: 0, effectiveRange: nil) as? NSFont)?.pointSize == NoteAppearance.bodyFontSize
+        let dividers = dividerPatterns && dividerMidLine && dividerRanges && dividerEmpty
+
+        // A list item holding only a typed space is not empty: Return starts the next item.
+        var spaceContinues = true
+        for (text, expected) in [("• ", "• \n• "), ("☐ ", "☐ \n☐ "), ("1. ", "1. \n2. ")] {
+            let editor = NSTextView()
+            editor.isRichText = true
+            editor.string = text + " "
+            editor.setSelectedRange(NSRange(location: editor.string.utf16.count, length: 0))
+            spaceContinues = spaceContinues
+                && RichTextFormatting.handleStructuredNewline(in: editor)
+                && editor.string == text + " " + String(expected.dropFirst(text.count))
+        }
+        var emptyEnds = true
+        for text in ["• ", "☐ ", "1. "] {
+            let editor = NSTextView()
+            editor.isRichText = true
+            editor.string = text
+            editor.setSelectedRange(NSRange(location: editor.string.utf16.count, length: 0))
+            emptyEnds = emptyEnds && RichTextFormatting.handleStructuredNewline(in: editor) && editor.string.isEmpty
+        }
+
+        let checkboxClicks = firstChecked && secondUnchecked && plainIgnored && buttonAdds && buttonRemoves && orderedList && dividers && spaceContinues && emptyEnds
             && todoBackspace && bulletBackspace && ordinaryBackspace && repaired
 
         let extendedMarkdown = strikeMarkdown && headingMarkdown && italicMarkdown && arithmeticUntouched

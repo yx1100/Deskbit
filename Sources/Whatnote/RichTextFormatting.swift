@@ -16,27 +16,52 @@ enum RichTextFormatting {
     private static let completedTodoMarker = "☑"
 
     static func toggleBold(in textView: NSTextView) {
+        toggleFontTrait(.boldFontMask, in: textView)
+    }
+
+    static func toggleItalic(in textView: NSTextView) {
+        toggleFontTrait(.italicFontMask, in: textView)
+    }
+
+    static func isItalic(in textView: NSTextView) -> Bool {
+        NSFontManager.shared.traits(of: font(in: textView)).contains(.italicFontMask)
+    }
+
+    private static func toggleFontTrait(_ trait: NSFontTraitMask, in textView: NSTextView) {
         let storage = textView.textStorage ?? NSTextStorage()
         let selected = textView.selectedRange()
         let currentFont = font(in: textView)
-        let shouldBold = !NSFontManager.shared.traits(of: currentFont).contains(.boldFontMask)
+        let shouldAdd = !NSFontManager.shared.traits(of: currentFont).contains(trait)
 
         if selected.length > 0 {
             storage.beginEditing()
             storage.enumerateAttribute(.font, in: selected) { value, range, _ in
                 let source = (value as? NSFont) ?? NoteAppearance.bodyFont()
-                let converted = shouldBold
-                    ? NSFontManager.shared.convert(source, toHaveTrait: .boldFontMask)
-                    : NSFontManager.shared.convert(source, toNotHaveTrait: .boldFontMask)
+                let converted = shouldAdd
+                    ? NSFontManager.shared.convert(source, toHaveTrait: trait)
+                    : NSFontManager.shared.convert(source, toNotHaveTrait: trait)
                 storage.addAttribute(.font, value: converted, range: range)
             }
             storage.endEditing()
         } else {
             var typing = textView.typingAttributes
-            typing[.font] = shouldBold
-                ? NSFontManager.shared.convert(currentFont, toHaveTrait: .boldFontMask)
-                : NSFontManager.shared.convert(currentFont, toNotHaveTrait: .boldFontMask)
+            typing[.font] = shouldAdd
+                ? NSFontManager.shared.convert(currentFont, toHaveTrait: trait)
+                : NSFontManager.shared.convert(currentFont, toNotHaveTrait: trait)
             textView.typingAttributes = typing
+        }
+    }
+
+    /// Mark as Checked (⇧⌘U): checks the selected checklist items, or unchecks them
+    /// when all are already checked.
+    static func toggleCheckedState(in textView: NSTextView) {
+        guard let storage = textView.textStorage else { return }
+        let starts = paragraphStarts(in: storage.string, selection: textView.selectedRange())
+            .filter { todoState(in: storage.string, at: $0) != .plain }
+        guard !starts.isEmpty else { return }
+        let check = starts.contains { todoState(in: storage.string, at: $0) == .pending }
+        for start in starts where (todoState(in: storage.string, at: start) == .pending) == check {
+            toggleTodoCompletion(atParagraphStart: start, in: textView)
         }
     }
 
@@ -109,6 +134,8 @@ enum RichTextFormatting {
         let paragraph = (storage.string as NSString).paragraphRange(for: NSRange(location: start, length: 0))
         // Registering the whole paragraph lets undo restore both the marker and the strikethrough.
         guard textView.shouldChangeText(in: paragraph, replacementString: nil) else { return false }
+        // Ticking a box should not move the cursor; the edit keeps the text length.
+        let savedSelection = textView.selectedRanges
         let completed = state == .pending
         storage.beginEditing()
         storage.replaceCharacters(
@@ -117,6 +144,7 @@ enum RichTextFormatting {
         )
         applyTodoCompletion(completed, storage: storage, paragraphStart: start)
         storage.endEditing()
+        textView.selectedRanges = savedSelection
         textView.didChangeText()
         return true
     }
@@ -341,6 +369,24 @@ enum RichTextFormatting {
         setTypingTodoCompletion(false, textView: textView)
     }
 
+    /// Puts a "---" divider on its own line at the cursor and moves the cursor below it.
+    static func insertDivider(in textView: NSTextView) {
+        guard let storage = textView.textStorage else { return }
+        let selection = textView.selectedRange()
+        let nsString = storage.string as NSString
+        let startsLine = selection.location == 0 || nsString.character(at: selection.location - 1) == 0x0A
+        let text = (startsLine ? "" : "\n") + "\(DividerLine.marker)\n"
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NoteAppearance.bodyFont(),
+            .foregroundColor: NoteAppearance.textColor
+        ]
+        guard textView.shouldChangeText(in: selection, replacementString: text) else { return }
+        storage.replaceCharacters(in: selection, with: NSAttributedString(string: text, attributes: attributes))
+        textView.setSelectedRange(NSRange(location: selection.location + (text as NSString).length, length: 0))
+        textView.typingAttributes = attributes
+        textView.didChangeText()
+    }
+
     static func isOrderedList(in textView: NSTextView) -> Bool {
         guard let storage = textView.textStorage else { return false }
         return paragraphStarts(in: storage.string, selection: textView.selectedRange()).first.map {
@@ -550,10 +596,8 @@ enum RichTextFormatting {
 
         let taskState = todoState(in: storage.string, at: paragraph.location)
         if taskState != .plain {
-            let marker = taskState == .pending ? pendingTodoMarker : completedTodoMarker
-            let content = nsString.substring(with: paragraph).trimmingCharacters(in: .whitespacesAndNewlines)
             setTypingTodoCompletion(false, textView: textView)
-            if content == marker {
+            if isEmptyItem(paragraph, markerLength: 2, in: nsString) {
                 storage.replaceCharacters(in: NSRange(location: paragraph.location, length: 2), with: "")
                 textView.setSelectedRange(NSRange(location: paragraph.location, length: 0))
                 textView.didChangeText()
@@ -573,8 +617,7 @@ enum RichTextFormatting {
         }
 
         if let ordered = orderedMarker(in: storage.string, at: paragraph.location) {
-            let content = nsString.substring(with: paragraph).trimmingCharacters(in: .whitespacesAndNewlines)
-            if content == "\(ordered.number)." {
+            if isEmptyItem(paragraph, markerLength: ordered.length, in: nsString) {
                 // Return on an empty numbered item ends the list.
                 let markerRange = NSRange(location: paragraph.location, length: ordered.length)
                 guard textView.shouldChangeText(in: markerRange, replacementString: "") else { return true }
@@ -592,8 +635,7 @@ enum RichTextFormatting {
             return endHeadingOnNewline(in: textView, selection: selection)
         }
 
-        let content = nsString.substring(with: paragraph).trimmingCharacters(in: .whitespacesAndNewlines)
-        if content == marker {
+        if isEmptyItem(paragraph, markerLength: 2, in: nsString) {
             storage.replaceCharacters(in: NSRange(location: paragraph.location, length: 2), with: "")
             setTypingListIndent(false, textView: textView)
             textView.setSelectedRange(NSRange(location: paragraph.location, length: 0))
@@ -602,6 +644,15 @@ enum RichTextFormatting {
             textView.insertText("\n\(marker) ", replacementRange: selection)
         }
         return true
+    }
+
+    /// An item is empty only when nothing at all follows its marker; even a typed space counts as content.
+    private static func isEmptyItem(_ paragraph: NSRange, markerLength: Int, in string: NSString) -> Bool {
+        var end = NSMaxRange(paragraph)
+        while end > paragraph.location, [0x0A, 0x0D, 0x2029].contains(string.character(at: end - 1)) {
+            end -= 1
+        }
+        return end - paragraph.location <= markerLength
     }
 
     /// Return at the end of a heading starts a normal body paragraph.
