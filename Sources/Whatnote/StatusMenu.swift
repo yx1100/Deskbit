@@ -24,7 +24,7 @@ enum AppStatusMenu {
         menu.addItem(item(
             "排列便签",
             action: #selector(AppStatusMenuTarget.arrangeNotes),
-            symbol: "rectangle.3.group",
+            symbol: "square.grid.2x2",
             target: target
         ))
         menu.addItem(item(
