@@ -7,7 +7,7 @@ enum FirstLaunchGuide {
         let regularFont = NoteAppearance.bodyFont()
         let boldFont = NoteAppearance.bodyFont(weight: .bold)
         let result = NSMutableAttributedString(
-            string: "欢迎使用随便记 👋\n\n**快捷键**\n⌃⌥⌘空格  在任何地方新建便签（可在偏好设置中修改）\n⌘B  加粗\n⌘K  插入链接\nTab / Shift+Tab  调整项目符号层级\n\n**待办**\n☐ 点一下左边的圆圈，勾选完成\n行首输入 - [ ] 空格，或点击底部的待办按钮，就能新建待办\n\n**Markdown**\n行首输入 # 空格变成标题，- 空格变成列表；链接、粗体、斜体、删除线、行内代码也能用 Markdown 语法输入\n\n**图片**\n直接粘贴或拖入图片，也可以点击底部的图片按钮插入\n\n**自动排列**\n点击右上角的排列按钮，自动将多个便签排列整齐\n\n**查看历史便签**\n点击 ✓ 完成便签，再点击菜单栏随便记图标 → 历史便签；可恢复或永久删除已完成的便签。",
+            string: "欢迎使用随便记 👋\n\n**快捷键**\n⌃⌥⌘空格  新建便签（在任何 App 中可用，可在设置中修改）\n⌘B  粗体\n⌘I  斜体\n⌘K  添加链接\n⇧⌘7  项目符号列表\n⇧⌘9  编号列表\n⇧⌘L  核对清单\n⇧⌘U  标记为已勾选\n\n**核对清单**\n☐ 点按左边的圆圈即可勾选\n在行首输入 - [ ] 加空格也能创建\n\n**Markdown**\n在行首输入 # 加空格变成标题，- 加空格变成项目符号，1. 加空格变成编号；单独一行输入 --- 变成分隔线\n\n**图片**\n直接粘贴或拖入图片\n\n**已完成的便签**\n点按左上角的 ✓ 完成便签，之后可在菜单栏随便记图标 → 已完成的便签中恢复或删除",
             attributes: [
                 .font: regularFont,
                 .foregroundColor: NoteAppearance.textColor

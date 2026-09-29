@@ -201,12 +201,12 @@ final class AppController: NSObject, NSApplicationDelegate, UNUserNotificationCe
                 }
             )
             let panel = NSPanel(
-                contentRect: NSRect(x: 0, y: 0, width: 440, height: 290),
+                contentRect: NSRect(x: 0, y: 0, width: 360, height: 170),
                 styleMask: [.titled, .closable],
                 backing: .buffered,
                 defer: false
             )
-            panel.title = "偏好设置"
+            panel.title = "设置"
             panel.isReleasedWhenClosed = false
             panel.isFloatingPanel = false
             panel.level = .normal
@@ -234,8 +234,8 @@ final class AppController: NSObject, NSApplicationDelegate, UNUserNotificationCe
         dismissHistoryPopover()
         NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
-        alert.messageText = "永久删除这条历史便签？"
-        alert.informativeText = "这项操作无法撤销。"
+        alert.messageText = "要删除这条便签吗？"
+        alert.informativeText = "此操作无法撤销。"
         alert.alertStyle = .warning
         alert.addButton(withTitle: "删除")
         alert.addButton(withTitle: "取消")
@@ -247,10 +247,10 @@ final class AppController: NSObject, NSApplicationDelegate, UNUserNotificationCe
         dismissHistoryPopover()
         NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
-        alert.messageText = "清空所有历史便签？"
-        alert.informativeText = "这项操作无法撤销。"
+        alert.messageText = "要删除所有已完成的便签吗？"
+        alert.informativeText = "此操作无法撤销。"
         alert.alertStyle = .warning
-        alert.addButton(withTitle: "清空")
+        alert.addButton(withTitle: "全部删除")
         alert.addButton(withTitle: "取消")
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         NoteStore.shared.clearCompleted()

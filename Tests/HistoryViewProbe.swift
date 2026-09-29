@@ -30,12 +30,12 @@ struct HistoryViewProbe {
         let controls = descendants(of: controller.view).compactMap { $0 as? NSControl }
         let labels = controls.compactMap { $0.accessibilityLabel() }
         guard labels.filter({ $0 == "恢复便签" }).count == 2,
-              labels.filter({ $0 == "永久删除便签" }).count == 2,
-              labels.contains("清空历史便签") else { exit(2) }
+              labels.filter({ $0 == "删除便签" }).count == 2,
+              labels.contains("删除所有已完成的便签") else { exit(2) }
 
         controls.first(where: { $0.accessibilityLabel() == "恢复便签" })?.performClick(nil)
-        controls.first(where: { $0.accessibilityLabel() == "永久删除便签" })?.performClick(nil)
-        controls.first(where: { $0.accessibilityLabel() == "清空历史便签" })?.performClick(nil)
+        controls.first(where: { $0.accessibilityLabel() == "删除便签" })?.performClick(nil)
+        controls.first(where: { $0.accessibilityLabel() == "删除所有已完成的便签" })?.performClick(nil)
         guard restoredID == second.id, deletedID == second.id, clearCount == 1 else { exit(3) }
 
         if let capturePath = CommandLine.arguments.dropFirst().first(where: { $0.hasSuffix(".png") }),
@@ -55,7 +55,7 @@ struct HistoryViewProbe {
         emptyController.loadView()
         let emptyLabels = descendants(of: emptyController.view)
             .compactMap { ($0 as? NSTextField)?.stringValue }
-        guard emptyLabels.contains("暂无历史便签") else { exit(4) }
+        guard emptyLabels.contains("没有已完成的便签") else { exit(4) }
 
         let manyNotes = (0..<8).map { index -> StickyNote in
             var note = StickyNote.fresh(index: index)

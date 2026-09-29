@@ -10,29 +10,30 @@ struct FirstLaunchGuideProbe {
         欢迎使用随便记 👋
 
         快捷键
-        ⌃⌥⌘空格  在任何地方新建便签（可在偏好设置中修改）
-        ⌘B  加粗
-        ⌘K  插入链接
-        Tab / Shift+Tab  调整项目符号层级
+        ⌃⌥⌘空格  新建便签（在任何 App 中可用，可在设置中修改）
+        ⌘B  粗体
+        ⌘I  斜体
+        ⌘K  添加链接
+        ⇧⌘7  项目符号列表
+        ⇧⌘9  编号列表
+        ⇧⌘L  核对清单
+        ⇧⌘U  标记为已勾选
 
-        待办
-        ☐ 点一下左边的圆圈，勾选完成
-        行首输入 - [ ] 空格，或点击底部的待办按钮，就能新建待办
+        核对清单
+        ☐ 点按左边的圆圈即可勾选
+        在行首输入 - [ ] 加空格也能创建
 
         Markdown
-        行首输入 # 空格变成标题，- 空格变成列表；链接、粗体、斜体、删除线、行内代码也能用 Markdown 语法输入
+        在行首输入 # 加空格变成标题，- 加空格变成项目符号，1. 加空格变成编号；单独一行输入 --- 变成分隔线
 
         图片
-        直接粘贴或拖入图片，也可以点击底部的图片按钮插入
+        直接粘贴或拖入图片
 
-        自动排列
-        点击右上角的排列按钮，自动将多个便签排列整齐
-
-        查看历史便签
-        点击 ✓ 完成便签，再点击菜单栏随便记图标 → 历史便签；可恢复或永久删除已完成的便签。
+        已完成的便签
+        点按左上角的 ✓ 完成便签，之后可在菜单栏随便记图标 → 已完成的便签中恢复或删除
         """)
-        verifyBold(in: attributedGuide, expected: ["快捷键", "待办", "Markdown", "图片", "自动排列", "查看历史便签"])
-        verifyRegular(in: attributedGuide, expected: ["欢迎使用", "随便记", "⌃⌥⌘空格", "加粗", "插入链接", "调整项目符号层级"])
+        verifyBold(in: attributedGuide, expected: ["\n快捷键\n", "\n核对清单\n", "\nMarkdown\n", "\n图片\n", "\n已完成的便签\n"])
+        verifyRegular(in: attributedGuide, expected: ["欢迎使用", "随便记", "⌃⌥⌘空格", "粗体", "添加链接", "项目符号列表"])
         // The demo line is a real, clickable to-do item.
         precondition(TodoMarker.isCompleted(in: guide as NSString, at: (guide as NSString).range(of: "☐").location) == false)
         precondition(!guide.contains("**"))
@@ -44,7 +45,8 @@ struct FirstLaunchGuideProbe {
         for string in strings {
             let range = (guide.string as NSString).range(of: string)
             precondition(range.location != NSNotFound)
-            let font = guide.attribute(.font, at: range.location, effectiveRange: nil) as? NSFont
+            let location = string.hasPrefix("\n") ? range.location + 1 : range.location
+            let font = guide.attribute(.font, at: location, effectiveRange: nil) as? NSFont
             precondition(font.map { NSFontManager.shared.traits(of: $0).contains(.boldFontMask) } == true, string)
         }
     }

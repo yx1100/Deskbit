@@ -22,13 +22,13 @@ enum AppStatusMenu {
             target: target
         ))
         menu.addItem(item(
-            "自动排序便签",
+            "排列便签",
             action: #selector(AppStatusMenuTarget.arrangeNotes),
             symbol: "rectangle.3.group",
             target: target
         ))
         menu.addItem(item(
-            "历史便签",
+            "已完成的便签",
             action: #selector(AppStatusMenuTarget.showHistoryFromMenu),
             symbol: "clock.arrow.circlepath",
             target: target
@@ -36,15 +36,14 @@ enum AppStatusMenu {
         let showAll = item(
             "显示所有便签",
             action: #selector(AppStatusMenuTarget.showAllNotes),
-            key: "0",
             symbol: "macwindow.on.rectangle",
             target: target
         )
-        showAll.toolTip = "把所有便签移到当前桌面并放到最前面"
+        showAll.toolTip = "将所有便签移到当前桌面"
         menu.addItem(showAll)
         menu.addItem(.separator())
         menu.addItem(item(
-            "偏好设置…",
+            "设置…",
             action: #selector(AppStatusMenuTarget.showPreferencesFromMenu),
             key: ",",
             symbol: "gearshape",

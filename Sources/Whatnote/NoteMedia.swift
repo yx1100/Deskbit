@@ -220,8 +220,8 @@ enum NoteLinks {
         field.stringValue = existingURL?.absoluteString ?? (url(from: selectedText) != nil ? selectedText : "")
 
         let alert = NSAlert()
-        alert.messageText = existingURL == nil ? "插入链接" : "编辑链接"
-        alert.informativeText = target.length > 0 ? "为选中的文字添加链接。" : "链接地址会作为文字插入到光标处。"
+        alert.messageText = existingURL == nil ? "添加链接" : "编辑链接"
+        alert.informativeText = ""
         alert.accessoryView = field
         alert.addButton(withTitle: "确定")
         alert.addButton(withTitle: "取消")

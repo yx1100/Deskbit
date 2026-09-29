@@ -30,8 +30,8 @@ final class HotKeyRecorderView: NSView {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     var displayText: String {
-        if isRecording { return "请按下快捷键…" }
-        return shortcut?.displayString ?? "未设置"
+        if isRecording { return "输入快捷键" }
+        return shortcut?.displayString ?? "无"
     }
 
     override func mouseDown(with event: NSEvent) {
@@ -126,10 +126,10 @@ final class PreferencesViewController: NSViewController {
     private let applyShortcut: (HotKeyShortcut?) -> Bool
     private let onRecordingChanged: (Bool) -> Void
     private let recorder: HotKeyRecorderView
-    private let statusLabel = NSTextField(wrappingLabelWithString: "")
-    private let launchCheckbox = NSButton(checkboxWithTitle: "登录 Mac 时自动启动随便记", target: nil, action: nil)
-    private let launchHint = NSTextField(wrappingLabelWithString: "")
-    private let openLoginItemsButton = NSButton(title: "打开系统设置…", target: nil, action: nil)
+    private let statusLabel = NSTextField(labelWithString: "")
+    private let launchCheckbox = NSButton(checkboxWithTitle: "登录时打开", target: nil, action: nil)
+    private let launchHint = NSTextField(labelWithString: "")
+    private let openLoginItemsButton = NSButton(title: "打开系统设置", target: nil, action: nil)
 
     init(
         shortcut: HotKeyShortcut?,
@@ -145,87 +145,60 @@ final class PreferencesViewController: NSViewController {
     required init?(coder: NSCoder) { nil }
 
     override func loadView() {
-        let root = NSView(frame: NSRect(x: 0, y: 0, width: 440, height: 290))
-
-        let title = NSTextField(labelWithString: "新建便签快捷键：")
-        title.font = .systemFont(ofSize: 13, weight: .medium)
-
+        let title = NSTextField(labelWithString: "新建便签")
         recorder.translatesAutoresizingMaskIntoConstraints = false
+        recorder.toolTip = "点按后输入新的快捷键。按 Esc 取消，按 Delete 清除。"
         recorder.onRecordingChanged = { [weak self] isRecording in
             self?.onRecordingChanged(isRecording)
         }
         recorder.onShortcutChanged = { [weak self] shortcut in
             self?.commit(shortcut)
         }
-
-        let resetButton = NSButton(title: "恢复默认", target: self, action: #selector(resetToDefault))
+        let resetButton = NSButton(title: "还原", target: self, action: #selector(resetToDefault))
         resetButton.bezelStyle = .rounded
+        resetButton.toolTip = "还原为 \(HotKeyShortcut.defaultNewNote.displayString)"
+        let shortcutRow = NSStackView(views: [title, recorder, resetButton])
+        shortcutRow.orientation = .horizontal
+        shortcutRow.alignment = .centerY
+        shortcutRow.spacing = 10
 
-        let row = NSStackView(views: [title, recorder, resetButton])
-        row.orientation = .horizontal
-        row.alignment = .centerY
-        row.spacing = 10
-        row.translatesAutoresizingMaskIntoConstraints = false
-        root.addSubview(row)
-
-        let hint = NSTextField(wrappingLabelWithString: "点击输入框后按下新的组合键（需包含 ⌘、⌥ 或 ⌃）。按 Esc 取消，按 Delete 清除快捷键。默认快捷键：\(HotKeyShortcut.defaultNewNote.displayString)")
-        hint.font = .systemFont(ofSize: 11)
-        hint.textColor = .secondaryLabelColor
-        hint.translatesAutoresizingMaskIntoConstraints = false
-        root.addSubview(hint)
-
-        statusLabel.font = .systemFont(ofSize: 11, weight: .medium)
+        for label in [statusLabel, launchHint] {
+            label.font = .systemFont(ofSize: 11)
+            label.lineBreakMode = .byTruncatingTail
+        }
         statusLabel.textColor = .systemRed
-        statusLabel.translatesAutoresizingMaskIntoConstraints = false
-        root.addSubview(statusLabel)
 
         let separator = NSBox()
         separator.boxType = .separator
-        separator.translatesAutoresizingMaskIntoConstraints = false
-        root.addSubview(separator)
 
         launchCheckbox.target = self
         launchCheckbox.action = #selector(toggleLaunchAtLogin)
-        launchCheckbox.translatesAutoresizingMaskIntoConstraints = false
-        root.addSubview(launchCheckbox)
-
-        launchHint.font = .systemFont(ofSize: 11)
-        launchHint.textColor = .secondaryLabelColor
-        launchHint.translatesAutoresizingMaskIntoConstraints = false
-        root.addSubview(launchHint)
-
         openLoginItemsButton.target = self
         openLoginItemsButton.action = #selector(openLoginItems)
         openLoginItemsButton.bezelStyle = .rounded
-        openLoginItemsButton.translatesAutoresizingMaskIntoConstraints = false
-        root.addSubview(openLoginItemsButton)
+        openLoginItemsButton.controlSize = .small
+        let launchRow = NSStackView(views: [launchCheckbox, openLoginItemsButton])
+        launchRow.orientation = .horizontal
+        launchRow.alignment = .centerY
+        launchRow.spacing = 10
+
+        let content = NSStackView(views: [shortcutRow, statusLabel, separator, launchRow, launchHint])
+        content.frame = NSRect(x: 0, y: 0, width: 360, height: 170)
+        content.orientation = .vertical
+        content.alignment = .leading
+        content.spacing = 10
+        content.edgeInsets = NSEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
+        content.setCustomSpacing(14, after: statusLabel)
+        content.setCustomSpacing(14, after: separator)
 
         NSLayoutConstraint.activate([
-            recorder.widthAnchor.constraint(equalToConstant: 180),
-            recorder.heightAnchor.constraint(equalToConstant: 28),
-            row.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
-            row.trailingAnchor.constraint(lessThanOrEqualTo: root.trailingAnchor, constant: -20),
-            row.topAnchor.constraint(equalTo: root.topAnchor, constant: 24),
-            hint.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
-            hint.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
-            hint.topAnchor.constraint(equalTo: row.bottomAnchor, constant: 14),
-            statusLabel.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
-            statusLabel.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
-            statusLabel.topAnchor.constraint(equalTo: hint.bottomAnchor, constant: 10),
-            separator.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
-            separator.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
-            separator.topAnchor.constraint(equalTo: statusLabel.bottomAnchor, constant: 12),
-            launchCheckbox.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
-            launchCheckbox.trailingAnchor.constraint(lessThanOrEqualTo: root.trailingAnchor, constant: -20),
-            launchCheckbox.topAnchor.constraint(equalTo: separator.bottomAnchor, constant: 16),
-            launchHint.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 38),
-            launchHint.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
-            launchHint.topAnchor.constraint(equalTo: launchCheckbox.bottomAnchor, constant: 6),
-            openLoginItemsButton.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 34),
-            openLoginItemsButton.topAnchor.constraint(equalTo: launchHint.bottomAnchor, constant: 8),
-            openLoginItemsButton.bottomAnchor.constraint(lessThanOrEqualTo: root.bottomAnchor, constant: -16)
+            recorder.widthAnchor.constraint(equalToConstant: 150),
+            recorder.heightAnchor.constraint(equalToConstant: 26),
+            content.widthAnchor.constraint(equalToConstant: 360),
+            separator.widthAnchor.constraint(equalToConstant: 320)
         ])
-        view = root
+        view = content
+        statusLabel.isHidden = true
         refreshLaunchAtLogin()
     }
 
@@ -239,24 +212,20 @@ final class PreferencesViewController: NSViewController {
         let state = LaunchAtLogin.state
         launchCheckbox.state = state == .enabled || state == .requiresApproval ? .on : .off
         launchCheckbox.isEnabled = state != .unsupported
-        openLoginItemsButton.isHidden = state == .unsupported
+        openLoginItemsButton.isHidden = state != .requiresApproval
 
-        var hint: String
+        var hint = ""
         switch state {
         case .unsupported:
-            hint = "开机自启动需要 macOS 13 或更高版本。"
+            hint = "需要 macOS 13 或更高版本"
         case .requiresApproval:
-            hint = "还需要在“系统设置 → 通用 → 登录项”中允许随便记。"
+            hint = "需在系统设置的“登录项”中允许"
         case .enabled, .disabled:
-            hint = "也可以在“系统设置 → 通用 → 登录项”中管理。"
+            if !LaunchAtLogin.isInApplicationsFolder { hint = "请先将 App 移到“应用程序”文件夹" }
         }
-        if state != .unsupported, !LaunchAtLogin.isInApplicationsFolder {
-            hint += "建议先把随便记拖到“应用程序”文件夹再开启，否则移动或重新构建后自启动可能失效。"
-        }
-        if let error {
-            hint = "设置失败：\(error)"
-        }
+        if let error { hint = "设置失败：\(error)" }
         launchHint.stringValue = hint
+        launchHint.isHidden = hint.isEmpty
         launchHint.textColor = error == nil && state != .requiresApproval ? .secondaryLabelColor : .systemOrange
     }
 
@@ -276,7 +245,7 @@ final class PreferencesViewController: NSViewController {
 
     func update(shortcut: HotKeyShortcut?) {
         recorder.shortcut = shortcut
-        statusLabel.stringValue = ""
+        showError(nil)
         refreshLaunchAtLogin()
     }
 
@@ -288,10 +257,15 @@ final class PreferencesViewController: NSViewController {
 
     private func commit(_ shortcut: HotKeyShortcut?) {
         if applyShortcut(shortcut) {
-            statusLabel.stringValue = ""
+            showError(nil)
         } else {
             recorder.shortcut = HotKeyPreferences.newNoteShortcut()
-            statusLabel.stringValue = "无法使用这个快捷键（可能已被系统或其他应用占用），请换一个组合。"
+            showError("此快捷键不可用，可能已被其他 App 占用")
         }
+    }
+
+    private func showError(_ message: String?) {
+        statusLabel.stringValue = message ?? ""
+        statusLabel.isHidden = message == nil
     }
 }

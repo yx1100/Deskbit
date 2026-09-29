@@ -16,27 +16,52 @@ enum RichTextFormatting {
     private static let completedTodoMarker = "☑"
 
     static func toggleBold(in textView: NSTextView) {
+        toggleFontTrait(.boldFontMask, in: textView)
+    }
+
+    static func toggleItalic(in textView: NSTextView) {
+        toggleFontTrait(.italicFontMask, in: textView)
+    }
+
+    static func isItalic(in textView: NSTextView) -> Bool {
+        NSFontManager.shared.traits(of: font(in: textView)).contains(.italicFontMask)
+    }
+
+    private static func toggleFontTrait(_ trait: NSFontTraitMask, in textView: NSTextView) {
         let storage = textView.textStorage ?? NSTextStorage()
         let selected = textView.selectedRange()
         let currentFont = font(in: textView)
-        let shouldBold = !NSFontManager.shared.traits(of: currentFont).contains(.boldFontMask)
+        let shouldAdd = !NSFontManager.shared.traits(of: currentFont).contains(trait)
 
         if selected.length > 0 {
             storage.beginEditing()
             storage.enumerateAttribute(.font, in: selected) { value, range, _ in
                 let source = (value as? NSFont) ?? NoteAppearance.bodyFont()
-                let converted = shouldBold
-                    ? NSFontManager.shared.convert(source, toHaveTrait: .boldFontMask)
-                    : NSFontManager.shared.convert(source, toNotHaveTrait: .boldFontMask)
+                let converted = shouldAdd
+                    ? NSFontManager.shared.convert(source, toHaveTrait: trait)
+                    : NSFontManager.shared.convert(source, toNotHaveTrait: trait)
                 storage.addAttribute(.font, value: converted, range: range)
             }
             storage.endEditing()
         } else {
             var typing = textView.typingAttributes
-            typing[.font] = shouldBold
-                ? NSFontManager.shared.convert(currentFont, toHaveTrait: .boldFontMask)
-                : NSFontManager.shared.convert(currentFont, toNotHaveTrait: .boldFontMask)
+            typing[.font] = shouldAdd
+                ? NSFontManager.shared.convert(currentFont, toHaveTrait: trait)
+                : NSFontManager.shared.convert(currentFont, toNotHaveTrait: trait)
             textView.typingAttributes = typing
+        }
+    }
+
+    /// Mark as Checked (⇧⌘U): checks the selected checklist items, or unchecks them
+    /// when all are already checked.
+    static func toggleCheckedState(in textView: NSTextView) {
+        guard let storage = textView.textStorage else { return }
+        let starts = paragraphStarts(in: storage.string, selection: textView.selectedRange())
+            .filter { todoState(in: storage.string, at: $0) != .plain }
+        guard !starts.isEmpty else { return }
+        let check = starts.contains { todoState(in: storage.string, at: $0) == .pending }
+        for start in starts where (todoState(in: storage.string, at: start) == .pending) == check {
+            toggleTodoCompletion(atParagraphStart: start, in: textView)
         }
     }
 

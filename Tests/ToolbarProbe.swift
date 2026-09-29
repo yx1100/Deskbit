@@ -12,7 +12,7 @@ struct ToolbarProbe {
 
         let buttons = descendants(of: toolbar).compactMap { $0 as? NSButton }
         let labels = buttons.compactMap { $0.accessibilityLabel() }
-        let expected = ["完成", "蓝色", "绿色", "黄色", "粉色", "新建便签", "置顶", "自动排序便签"]
+        let expected = ["完成", "蓝色", "绿色", "黄色", "粉色", "新建便签", "置顶", "排列便签"]
         guard labels == expected else { exit(2) }
         guard descendants(of: toolbar).filter({ $0 is GlassCapsuleView }).count == 3 else { exit(1) }
 
@@ -25,7 +25,7 @@ struct ToolbarProbe {
                   $0.dotDiameter < selectedColor.dotDiameter && $0.ringWidth < selectedColor.ringWidth
               }) else { exit(4) }
 
-        guard let arrange = buttons.first(where: { $0.accessibilityLabel() == "自动排序便签" }) else { exit(5) }
+        guard let arrange = buttons.first(where: { $0.accessibilityLabel() == "排列便签" }) else { exit(5) }
         arrange.performClick(nil)
         guard delegate.arrangeCount == 1 else { exit(6) }
         guard !labels.contains("历史便签") else { exit(12) }
@@ -49,12 +49,12 @@ struct ToolbarProbe {
         footer.delegate = delegate
         let formattingButtons = descendants(of: footer).compactMap { $0 as? NoteToolButton }
         guard formattingButtons.compactMap({ $0.accessibilityLabel() }) == [
-            "加粗（⌘B）",
-            "项目符号（⌘⇧8；Tab / Shift+Tab 调整级别）",
-            "编号列表（⌘⇧7）",
-            "待办事项（⌘⇧X）",
-            "插入分割线（Markdown：---）",
-            "插入图片（也可直接粘贴或拖入）"
+            "粗体（⌘B）",
+            "项目符号列表（⇧⌘7）",
+            "编号列表（⇧⌘9）",
+            "核对清单（⇧⌘L）",
+            "分隔线",
+            "插入图片"
         ] else { exit(13) }
         formattingButtons[2].performClick(nil)
         formattingButtons[3].performClick(nil)

@@ -30,7 +30,7 @@ final class StickyToolbarView: NSView {
     init(color: NoteColor, isPinned: Bool) {
         arrangeButton = NoteToolButton(
             symbol: "rectangle.3.group",
-            tip: "自动排序便签",
+            tip: "排列便签",
             action: #selector(StickyToolbarView.arrangeNotes)
         )
         newButton = NoteToolButton(symbol: "plus", tip: "新建便签", action: #selector(StickyToolbarView.newNote))
@@ -121,34 +121,34 @@ final class StickyFormattingFooterView: NSView {
     override init(frame frameRect: NSRect) {
         boldButton = NoteToolButton(
             symbol: "bold",
-            tip: "加粗（⌘B）",
+            tip: "粗体（⌘B）",
             action: #selector(StickyFormattingFooterView.toggleBold)
         )
         bulletButton = NoteToolButton(
             symbol: "list.bullet",
-            tip: "项目符号（⌘⇧8；Tab / Shift+Tab 调整级别）",
+            tip: "项目符号列表（⇧⌘7）",
             action: #selector(StickyFormattingFooterView.toggleBullet)
         )
         orderedButton = NoteToolButton(
             symbol: "list.number",
             fallbackSymbol: "list.bullet",
-            tip: "编号列表（⌘⇧7）",
+            tip: "编号列表（⇧⌘9）",
             action: #selector(StickyFormattingFooterView.toggleOrdered)
         )
         todoButton = NoteToolButton(
             symbol: "checklist",
             fallbackSymbol: "checkmark.circle",
-            tip: "待办事项（⌘⇧X）",
+            tip: "核对清单（⇧⌘L）",
             action: #selector(StickyFormattingFooterView.toggleTodo)
         )
         dividerButton = NoteToolButton(
             symbol: "minus",
-            tip: "插入分割线（Markdown：---）",
+            tip: "分隔线",
             action: #selector(StickyFormattingFooterView.insertDivider)
         )
         imageButton = NoteToolButton(
             symbol: "photo",
-            tip: "插入图片（也可直接粘贴或拖入）",
+            tip: "插入图片",
             action: #selector(StickyFormattingFooterView.insertImage)
         )
         super.init(frame: frameRect)
@@ -203,6 +203,8 @@ enum StickyEditingShortcut: Equatable {
 
 final class StickyTextView: NSTextView {
     var onToggleBold: (() -> Void)?
+    var onToggleItalic: (() -> Void)?
+    var onToggleChecked: (() -> Void)?
     var onToggleBulletList: (() -> Void)?
     var onToggleOrderedList: (() -> Void)?
     var onToggleTodo: (() -> Void)?
@@ -256,18 +258,28 @@ final class StickyTextView: NSTextView {
             onToggleBold?()
             return true
         }
-        let isBulletShortcut = modifiers == [.command, .shift] && (key == "8" || key == "*")
-        if isBulletShortcut {
-            onToggleBulletList?()
+        if modifiers == [.command], key == "i" {
+            onToggleItalic?()
             return true
         }
-        if modifiers == [.command, .shift], key == "7" || key == "&" {
-            onToggleOrderedList?()
-            return true
-        }
-        if modifiers == [.command, .shift], key == "x" {
-            onToggleTodo?()
-            return true
+        // Apple Notes shortcuts: ⇧⌘7 bulleted list, ⇧⌘9 numbered list, ⇧⌘L checklist, ⇧⌘U mark as checked.
+        if modifiers == [.command, .shift] {
+            switch key {
+            case "7", "&":
+                onToggleBulletList?()
+                return true
+            case "9", "(":
+                onToggleOrderedList?()
+                return true
+            case "l":
+                onToggleTodo?()
+                return true
+            case "u":
+                onToggleChecked?()
+                return true
+            default:
+                break
+            }
         }
         if modifiers == [.command], key == "k" {
             onEditLink?()
