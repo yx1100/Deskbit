@@ -484,7 +484,8 @@ struct RichTextProbe {
         let codeButton = codeButtonOn && codeButtonOff && emptyCodeStarted
         print("codeButton on=\(codeButtonOn) off=\(codeButtonOff) empty=\(emptyCodeStarted)")
 
-        // The cursor rests only at a divider's left end; Backspace next to it deletes the whole divider.
+        // The cursor rests only at a divider's left end. Backspace below a divider deletes its last
+        // dash; at its left end Backspace is left to AppKit, which joins it to the line above.
         let dividerCursorEditor = NSTextView()
         dividerCursorEditor.isRichText = true
         dividerCursorEditor.string = "上\n---\n下"
@@ -503,12 +504,12 @@ struct RichTextProbe {
         let typingDividerUntouched = snapped(5, from: 4, userMove: false) == 5
         dividerCursorEditor.setSelectedRange(NSRange(location: 6, length: 0))
         let backspaceBelow = RichTextFormatting.handleDividerBackspace(in: dividerCursorEditor)
-            && dividerCursorEditor.string == "上\n下"
-            && dividerCursorEditor.selectedRange().location == 2
+            && dividerCursorEditor.string == "上\n--\n下"
+            && dividerCursorEditor.selectedRange().location == 5
         dividerCursorEditor.string = "上\n---\n下"
         dividerCursorEditor.setSelectedRange(NSRange(location: 2, length: 0))
-        let backspaceAtDivider = RichTextFormatting.handleDividerBackspace(in: dividerCursorEditor)
-            && dividerCursorEditor.string == "上\n下"
+        let backspaceAtDivider = !RichTextFormatting.handleDividerBackspace(in: dividerCursorEditor)
+            && dividerCursorEditor.string == "上\n---\n下"
         dividerCursorEditor.setSelectedRange(NSRange(location: 3, length: 0))
         let ordinaryBackspaceIgnored = !RichTextFormatting.handleDividerBackspace(in: dividerCursorEditor)
         let dividerCursor = clickedDivider && backIntoDivider && rightFromDivider && plainLineUntouched

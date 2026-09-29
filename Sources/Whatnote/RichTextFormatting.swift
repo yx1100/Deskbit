@@ -389,24 +389,20 @@ enum RichTextFormatting {
         return NSRange(location: divider.location, length: 0)
     }
 
-    /// Backspace at a divider's left end, or at the start of the line below it, deletes the whole
-    /// divider instead of one dash or the line break.
+    /// Backspace at the start of the line below a divider deletes the divider's last dash,
+    /// like the character before the cursor, rather than the hidden line break. At a divider's
+    /// left end Backspace works as usual and joins it to the line above.
     static func handleDividerBackspace(in textView: NSTextView) -> Bool {
         guard let storage = textView.textStorage else { return false }
         let selection = textView.selectedRange()
-        guard selection.length == 0 else { return false }
+        guard selection.length == 0, selection.location > 1 else { return false }
         let string = storage.string as NSString
-        var divider: NSRange?
-        if let paragraph = dividerParagraph(containing: selection.location, in: storage),
-           paragraph.location == selection.location {
-            divider = paragraph
-        } else if selection.location > 0, string.character(at: selection.location - 1) == 0x0A {
-            divider = dividerParagraph(containing: selection.location - 1, in: storage)
-        }
-        guard let divider else { return false }
-        guard textView.shouldChangeText(in: divider, replacementString: "") else { return true }
-        storage.replaceCharacters(in: divider, with: "")
-        textView.setSelectedRange(NSRange(location: divider.location, length: 0))
+        guard string.character(at: selection.location - 1) == 0x0A,
+              dividerParagraph(containing: selection.location - 1, in: storage) != nil else { return false }
+        let lastDash = NSRange(location: selection.location - 2, length: 1)
+        guard textView.shouldChangeText(in: lastDash, replacementString: "") else { return true }
+        storage.replaceCharacters(in: lastDash, with: "")
+        textView.setSelectedRange(NSRange(location: selection.location - 1, length: 0))
         textView.didChangeText()
         return true
     }
