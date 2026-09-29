@@ -10,6 +10,7 @@ protocol StickyToolbarDelegate: AnyObject {
     func didTapOrderedList()
     func didTapTodo()
     func didTapDivider()
+    func didTapCodeBlock()
     func didTapLink()
     func didTapImage()
     func didTapNew()
@@ -114,9 +115,12 @@ final class StickyFormattingFooterView: NSView {
     private let orderedButton: NoteToolButton
     private let todoButton: NoteToolButton
     private let dividerButton: NoteToolButton
+    private let codeButton: NoteToolButton
     private let imageButton: NoteToolButton
 
-    private var buttons: [NoteToolButton] { [boldButton, bulletButton, orderedButton, todoButton, dividerButton, imageButton] }
+    private var buttons: [NoteToolButton] {
+        [boldButton, bulletButton, orderedButton, todoButton, dividerButton, codeButton, imageButton]
+    }
 
     override init(frame frameRect: NSRect) {
         boldButton = NoteToolButton(
@@ -146,6 +150,12 @@ final class StickyFormattingFooterView: NSView {
             tip: "分隔线",
             action: #selector(StickyFormattingFooterView.insertDivider)
         )
+        codeButton = NoteToolButton(
+            symbol: "chevron.left.forwardslash.chevron.right",
+            fallbackSymbol: "curlybraces",
+            tip: "代码块",
+            action: #selector(StickyFormattingFooterView.toggleCodeBlock)
+        )
         imageButton = NoteToolButton(
             symbol: "photo",
             tip: "插入图片",
@@ -167,8 +177,9 @@ final class StickyFormattingFooterView: NSView {
 
     required init?(coder: NSCoder) { nil }
 
-    func updateFormatting(isBold: Bool, isBulletList: Bool, isOrderedList: Bool, isTodoItem: Bool) {
+    func updateFormatting(isBold: Bool, isBulletList: Bool, isOrderedList: Bool, isTodoItem: Bool, isCodeBlock: Bool = false) {
         boldButton.isActive = isBold
+        codeButton.isActive = isCodeBlock
         bulletButton.isActive = isBulletList
         orderedButton.isActive = isOrderedList
         todoButton.isActive = isTodoItem
@@ -183,6 +194,7 @@ final class StickyFormattingFooterView: NSView {
     @objc private func toggleOrdered() { delegate?.didTapOrderedList() }
     @objc private func toggleTodo() { delegate?.didTapTodo() }
     @objc private func insertDivider() { delegate?.didTapDivider() }
+    @objc private func toggleCodeBlock() { delegate?.didTapCodeBlock() }
     @objc private func insertImage() { delegate?.didTapImage() }
 }
 

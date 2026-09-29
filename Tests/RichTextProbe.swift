@@ -438,7 +438,32 @@ struct RichTextProbe {
             && CodeBlock.isCodeLine(in: pastedCodeStorage, at: 12)
             && !CodeBlock.isCodeLine(in: pastedCodeStorage, at: 19)
             && CodeBlock.blocks(in: pastedCodeStorage, overlapping: NSRange(location: 14, length: 1)) == [NSRange(location: 2, length: 17)]
-        let codeBlocks = fenceStarted && codeKeepsMarkdown && codeContinues && codeEnds && codeRoundTrip && codeBackspace && pastedCode
+        let codeButtonEditor = NSTextView()
+        codeButtonEditor.isRichText = true
+        codeButtonEditor.string = "甲\n乙\n丙"
+        codeButtonEditor.setSelectedRange(NSRange(location: 0, length: 3))
+        RichTextFormatting.toggleCodeBlock(in: codeButtonEditor)
+        let codeButtonStorage = codeButtonEditor.textStorage!
+        let codeButtonOn = CodeBlock.isCodeLine(in: codeButtonStorage, at: 0)
+            && CodeBlock.isCodeLine(in: codeButtonStorage, at: 2)
+            && !CodeBlock.isCodeLine(in: codeButtonStorage, at: 4)
+            && RichTextFormatting.isCodeBlock(in: codeButtonEditor)
+            && CodeBlock.isFirstLine(in: codeButtonStorage, at: 0)
+            && !CodeBlock.isFirstLine(in: codeButtonStorage, at: 2)
+        RichTextFormatting.toggleCodeBlock(in: codeButtonEditor)
+        let codeButtonOff = !CodeBlock.isCodeLine(in: codeButtonStorage, at: 0)
+            && !CodeBlock.isCodeLine(in: codeButtonStorage, at: 2)
+            && codeButtonEditor.string == "甲\n乙\n丙"
+        let emptyCodeEditor = NSTextView()
+        emptyCodeEditor.isRichText = true
+        RichTextFormatting.toggleCodeBlock(in: emptyCodeEditor)
+        let emptyCodeStarted = emptyCodeEditor.string == "\n"
+            && CodeBlock.isCodeLine(in: emptyCodeEditor.textStorage!, at: 0)
+            && emptyCodeEditor.selectedRange().location == 0
+        let codeButton = codeButtonOn && codeButtonOff && emptyCodeStarted
+        print("codeButton on=\(codeButtonOn) off=\(codeButtonOff) empty=\(emptyCodeStarted)")
+
+        let codeBlocks = codeButton && fenceStarted && codeKeepsMarkdown && codeContinues && codeEnds && codeRoundTrip && codeBackspace && pastedCode
         print("codeBlock start=\(fenceStarted) keepsMarkdown=\(codeKeepsMarkdown) continues=\(codeContinues) ends=\(codeEnds) roundTrip=\(codeRoundTrip) backspace=\(codeBackspace) pasted=\(pastedCode)")
 
         print("bold=\(boldSurvived) legacyStrike=\(strikeSurvived) todo=\(todoPending && todoCompleted && todoRemoved && todoSurvived && todoSelectionPreserved && completedTodoNewline && splitCompletedTodo) bullet=\(bulletSurvived) futureBold=\(futureBoldOn && futureBoldOff) bulletToggle=\(bulletsOn && bulletsOff && bulletSelectionPreserved && bulletBecameTodo && todoBecameBullet) markdown=\(markdownChanged && markdownBold && markdownBullets && extendedMarkdown && trailingIsRegular) listExit=\(listExitClean) nesting=\(multiLevelOn && multiLevelOff && multiLevelSurvived && orphanPrevented && tieredMarkers && inheritedMarker && normalizedLegacyMarker) markerProportions=\(markerProportionsAreBalanced) bytes=\(data.count)")

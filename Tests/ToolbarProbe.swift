@@ -54,15 +54,19 @@ struct ToolbarProbe {
             "编号列表（⇧⌘9）",
             "核对清单（⇧⌘L）",
             "分隔线",
+            "代码块",
             "插入图片"
         ] else { exit(13) }
         formattingButtons[2].performClick(nil)
         formattingButtons[3].performClick(nil)
         formattingButtons[4].performClick(nil)
-        guard delegate.dividerCount == 1 else { exit(21) }
+        formattingButtons[5].performClick(nil)
+        guard delegate.dividerCount == 1, delegate.codeBlockCount == 1 else { exit(21) }
         guard delegate.orderedCount == 1, delegate.todoCount == 1 else { exit(10) }
         footer.updateFormatting(isBold: true, isBulletList: false, isOrderedList: true, isTodoItem: false)
-        guard formattingButtons.map(\.isActive) == [true, false, true, false, false, false] else { exit(16) }
+        guard formattingButtons.map(\.isActive) == [true, false, true, false, false, false, false] else { exit(16) }
+        footer.updateFormatting(isBold: false, isBulletList: false, isOrderedList: false, isTodoItem: false, isCodeBlock: true)
+        guard formattingButtons.map(\.isActive) == [false, false, false, false, false, true, false] else { exit(22) }
 
         // To-do markers are drawn as circles and toggle when clicked.
         var todoNote = StickyNote.fresh()
@@ -97,6 +101,7 @@ private final class ToolbarDelegateProbe: StickyToolbarDelegate {
     var todoCount = 0
     var orderedCount = 0
     var dividerCount = 0
+    var codeBlockCount = 0
 
     func didChooseColor(_ color: NoteColor) {}
     func didTapArrange() { arrangeCount += 1 }
@@ -106,6 +111,7 @@ private final class ToolbarDelegateProbe: StickyToolbarDelegate {
     func didTapOrderedList() { orderedCount += 1 }
     func didTapTodo() { todoCount += 1 }
     func didTapDivider() { dividerCount += 1 }
+    func didTapCodeBlock() { codeBlockCount += 1 }
     func didTapLink() {}
     func didTapImage() {}
     func didTapNew() {}

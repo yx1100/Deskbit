@@ -155,9 +155,12 @@ final class NoteLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
         }
         let length = min(charRange.length, string.length - charRange.location)
         var paragraphs = string.paragraphRange(for: NSRange(location: charRange.location, length: length))
+        // Spacing and code-block padding depend on whether the neighboring paragraphs are code.
         if paragraphs.location > 0 {
-            // The spacing after the previous paragraph depends on whether this one is code.
             paragraphs = NSUnionRange(paragraphs, string.paragraphRange(for: NSRange(location: paragraphs.location - 1, length: 0)))
+        }
+        if NSMaxRange(paragraphs) < string.length {
+            paragraphs = NSUnionRange(paragraphs, string.paragraphRange(for: NSRange(location: NSMaxRange(paragraphs), length: 0)))
         }
         super.invalidateGlyphs(
             forCharacterRange: NSUnionRange(charRange, paragraphs),
@@ -220,7 +223,27 @@ final class NoteLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
         let isCode = CodeBlock.isCodeLine(in: storage, at: index)
         let nextIsCode = CodeBlock.isCodeLine(in: storage, at: next)
         if isCode, nextIsCode { return 0 }
-        return isCode || nextIsCode ? spacing + CodeBlock.verticalPadding : spacing
+        return isCode ? spacing + CodeBlock.verticalPadding : spacing
+    }
+
+    /// The first line of a code block gets room above its text for the block's background,
+    /// so the background never reaches above the line, even at the very top of a note.
+    func layoutManager(
+        _ layoutManager: NSLayoutManager,
+        shouldSetLineFragmentRect lineFragmentRect: UnsafeMutablePointer<NSRect>,
+        lineFragmentUsedRect: UnsafeMutablePointer<NSRect>,
+        baselineOffset: UnsafeMutablePointer<CGFloat>,
+        in textContainer: NSTextContainer,
+        forGlyphRange glyphRange: NSRange
+    ) -> Bool {
+        guard let storage = layoutManager.textStorage, glyphRange.length > 0 else { return false }
+        let index = layoutManager.characterIndexForGlyph(at: glyphRange.location)
+        guard CodeBlock.isFirstLine(in: storage, at: index) else { return false }
+        let padding = CodeBlock.verticalPadding
+        lineFragmentRect.pointee.size.height += padding
+        lineFragmentUsedRect.pointee.size.height += padding
+        baselineOffset.pointee += padding
+        return true
     }
 
     override func drawBackground(forGlyphRange glyphsToShow: NSRange, at origin: NSPoint) {
@@ -229,12 +252,14 @@ final class NoteLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
         guard let storage = textStorage, let container = textContainers.first else { return }
         let padding = container.lineFragmentPadding
         let lineHeight = defaultLineHeight(for: CodeBlock.font())
+        // The first line's fragment already holds the padding above the text.
         func area(top: NSRect, bottom: NSRect) -> NSRect {
-            NSRect(
+            let bottomTextTop = bottom.minY + (bottom.minY == top.minY ? CodeBlock.verticalPadding : 0)
+            return NSRect(
                 x: top.minX + padding,
-                y: top.minY - CodeBlock.verticalPadding,
+                y: top.minY,
                 width: top.width - 2 * padding,
-                height: bottom.minY - top.minY + lineHeight + 2 * CodeBlock.verticalPadding
+                height: bottomTextTop + lineHeight + CodeBlock.verticalPadding - top.minY
             )
         }
         let characters = characterRange(forGlyphRange: glyphsToShow, actualGlyphRange: nil)
@@ -255,7 +280,8 @@ final class NoteLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
                 areas[areas.count - 1] = NSRect(x: last.minX, y: last.minY, width: last.width,
                                                 height: extra.minY + lineHeight + CodeBlock.verticalPadding - last.minY)
             } else {
-                areas.append(area(top: extra, bottom: extra))
+                areas.append(NSRect(x: extra.minX + padding, y: extra.minY, width: extra.width - 2 * padding,
+                                    height: lineHeight + CodeBlock.verticalPadding))
             }
         }
         for rect in areas {

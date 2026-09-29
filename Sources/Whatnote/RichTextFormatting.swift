@@ -664,6 +664,61 @@ enum RichTextFormatting {
         return true
     }
 
+    /// The code block button: turns the selected lines into a code block, or back into
+    /// plain text when they all are code already.
+    static func toggleCodeBlock(in textView: NSTextView) {
+        guard let storage = textView.textStorage else { return }
+        let selection = textView.selectedRange()
+        let nsString = storage.string as NSString
+        let atEmptyLastLine = selection.location >= storage.length
+            && (storage.length == 0 || nsString.character(at: storage.length - 1) == 0x0A)
+        if atEmptyLastLine {
+            if CodeBlock.isCodeStyle(textView.typingAttributes[.paragraphStyle] as? NSParagraphStyle) {
+                textView.typingAttributes = CodeBlock.bodyAttributes()
+                textView.needsDisplay = true
+                return
+            }
+            // Give the new block a real line so it has something to draw.
+            let end = NSRange(location: storage.length, length: 0)
+            let attributes = CodeBlock.attributes()
+            guard textView.shouldChangeText(in: end, replacementString: "\n") else { return }
+            storage.replaceCharacters(in: end, with: NSAttributedString(string: "\n", attributes: attributes))
+            textView.setSelectedRange(end)
+            textView.typingAttributes = attributes
+            textView.didChangeText()
+            textView.needsDisplay = true
+            return
+        }
+
+        let location = min(selection.location, storage.length - 1)
+        let paragraphs = nsString.paragraphRange(
+            for: NSRange(location: location, length: min(selection.length, storage.length - location))
+        )
+        let makeCode = !paragraphStarts(in: storage.string, selection: paragraphs)
+            .allSatisfy { CodeBlock.isCodeLine(in: storage, at: $0) }
+        let attributes = makeCode ? CodeBlock.attributes() : CodeBlock.bodyAttributes()
+        guard textView.shouldChangeText(in: paragraphs, replacementString: nil) else { return }
+        let savedSelection = textView.selectedRanges
+        storage.beginEditing()
+        storage.removeAttribute(.backgroundColor, range: paragraphs)
+        storage.addAttributes(attributes, range: paragraphs)
+        storage.endEditing()
+        textView.selectedRanges = savedSelection
+        textView.typingAttributes = attributes
+        textView.didChangeText()
+        textView.needsDisplay = true
+    }
+
+    static func isCodeBlock(in textView: NSTextView) -> Bool {
+        guard let storage = textView.textStorage else { return false }
+        let location = textView.selectedRange().location
+        if location >= storage.length,
+           storage.length == 0 || (storage.string as NSString).character(at: storage.length - 1) == 0x0A {
+            return CodeBlock.isCodeStyle(textView.typingAttributes[.paragraphStyle] as? NSParagraphStyle)
+        }
+        return CodeBlock.isCodeLine(in: storage, at: min(location, storage.length - 1))
+    }
+
     /// Return in code: a fence line ("```") starts a code block, Return inside one adds a code line,
     /// and Return on the empty last line or on a closing fence ends the block.
     /// Returns nil when the cursor is not in a code block or on a fence.

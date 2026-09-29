@@ -175,6 +175,13 @@ final class StickyWindowController: NSWindowController, NSWindowDelegate, NSText
         RichTextFormatting.insertDivider(in: textView)
     }
 
+    func didTapCodeBlock() {
+        let textView = rootView.textView
+        window?.makeFirstResponder(textView)
+        RichTextFormatting.toggleCodeBlock(in: textView)
+        updateFormattingState()
+    }
+
     func didTapTodo() {
         let textView = rootView.textView
         RichTextFormatting.toggleTodo(in: textView)
@@ -330,7 +337,8 @@ final class StickyWindowController: NSWindowController, NSWindowDelegate, NSText
             isBold: RichTextFormatting.isBold(in: textView),
             isBulletList: RichTextFormatting.isBulletList(in: textView),
             isOrderedList: RichTextFormatting.isOrderedList(in: textView),
-            isTodoItem: RichTextFormatting.todoState(in: textView) != .plain
+            isTodoItem: RichTextFormatting.todoState(in: textView) != .plain,
+            isCodeBlock: RichTextFormatting.isCodeBlock(in: textView)
         )
     }
 
