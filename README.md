@@ -159,6 +159,8 @@ open "dist/Whatnote.app"
 
 构建脚本生成仅包含 arm64 架构的 `dist/Whatnote.app`，在中文系统的访达、启动台和登录项中显示为“随便记”。
 
+App 图标有浅色和深色两个版本。安装了完整的 Xcode（并用 `sudo xcode-select -s /Applications/Xcode.app/Contents/Developer` 选中它）时，构建脚本会把两者编进资源目录，图标在访达、启动台和系统设置中随系统外观切换；只有命令行工具时使用浅色图标。
+
 如需生成 DMG 安装包：
 
 ```bash
