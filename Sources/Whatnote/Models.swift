@@ -2,10 +2,10 @@ import AppKit
 
 /// Note colors. Raw values match earlier versions so saved notes keep their color.
 enum NoteColor: String, Codable, CaseIterable {
+    case pink
+    case yellow
     case blue
     case mint
-    case yellow
-    case pink
 
     /// The note paper, also the fill of the color dot. Light tints keep black text at 10:1 contrast or better.
     var background: NSColor {
