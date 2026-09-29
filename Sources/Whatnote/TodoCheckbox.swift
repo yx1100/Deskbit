@@ -154,7 +154,11 @@ final class NoteLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
             return
         }
         let length = min(charRange.length, string.length - charRange.location)
-        let paragraphs = string.paragraphRange(for: NSRange(location: charRange.location, length: length))
+        var paragraphs = string.paragraphRange(for: NSRange(location: charRange.location, length: length))
+        if paragraphs.location > 0 {
+            // The spacing after the previous paragraph depends on whether this one is code.
+            paragraphs = NSUnionRange(paragraphs, string.paragraphRange(for: NSRange(location: paragraphs.location - 1, length: 0)))
+        }
         super.invalidateGlyphs(
             forCharacterRange: NSUnionRange(charRange, paragraphs),
             changeInLength: delta,
@@ -208,7 +212,55 @@ final class NoteLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
         paragraphSpacingAfterGlyphAt glyphIndex: Int,
         withProposedLineFragmentRect rect: NSRect
     ) -> CGFloat {
-        max(NoteAppearance.paragraphSpacing, paragraphStyle(atGlyph: glyphIndex, in: layoutManager)?.paragraphSpacing ?? 0)
+        let spacing = max(NoteAppearance.paragraphSpacing, paragraphStyle(atGlyph: glyphIndex, in: layoutManager)?.paragraphSpacing ?? 0)
+        guard let storage = layoutManager.textStorage, storage.length > 0 else { return spacing }
+        // Code lines sit close together; the block gets extra room above and below.
+        let index = min(layoutManager.characterIndexForGlyph(at: glyphIndex), storage.length - 1)
+        let next = NSMaxRange((storage.string as NSString).paragraphRange(for: NSRange(location: index, length: 0)))
+        let isCode = CodeBlock.isCodeLine(in: storage, at: index)
+        let nextIsCode = CodeBlock.isCodeLine(in: storage, at: next)
+        if isCode, nextIsCode { return 0 }
+        return isCode || nextIsCode ? spacing + CodeBlock.verticalPadding : spacing
+    }
+
+    override func drawBackground(forGlyphRange glyphsToShow: NSRange, at origin: NSPoint) {
+        // Code blocks go under the selection highlight that super draws.
+        defer { super.drawBackground(forGlyphRange: glyphsToShow, at: origin) }
+        guard let storage = textStorage, let container = textContainers.first else { return }
+        let padding = container.lineFragmentPadding
+        let lineHeight = defaultLineHeight(for: CodeBlock.font())
+        func area(top: NSRect, bottom: NSRect) -> NSRect {
+            NSRect(
+                x: top.minX + padding,
+                y: top.minY - CodeBlock.verticalPadding,
+                width: top.width - 2 * padding,
+                height: bottom.minY - top.minY + lineHeight + 2 * CodeBlock.verticalPadding
+            )
+        }
+        let characters = characterRange(forGlyphRange: glyphsToShow, actualGlyphRange: nil)
+        var areas = CodeBlock.blocks(in: storage, overlapping: characters).compactMap { block -> NSRect? in
+            let glyphs = glyphRange(forCharacterRange: block, actualCharacterRange: nil)
+            guard glyphs.length > 0 else { return nil }
+            return area(
+                top: lineFragmentRect(forGlyphAt: glyphs.location, effectiveRange: nil),
+                bottom: lineFragmentRect(forGlyphAt: NSMaxRange(glyphs) - 1, effectiveRange: nil)
+            )
+        }
+        // An empty last line typed in code style has no characters yet.
+        if extraLineFragmentTextContainer != nil, let textView = firstTextView,
+           textView.selectedRange().location == storage.length,
+           CodeBlock.isCodeStyle(textView.typingAttributes[.paragraphStyle] as? NSParagraphStyle) {
+            let extra = extraLineFragmentRect
+            if let last = areas.last, abs(last.maxY - extra.minY) < lineHeight {
+                areas[areas.count - 1] = NSRect(x: last.minX, y: last.minY, width: last.width,
+                                                height: extra.minY + lineHeight + CodeBlock.verticalPadding - last.minY)
+            } else {
+                areas.append(area(top: extra, bottom: extra))
+            }
+        }
+        for rect in areas {
+            CodeBlock.draw(in: rect.offsetBy(dx: origin.x, dy: origin.y))
+        }
     }
 
     private func paragraphStyle(atGlyph glyphIndex: Int, in layoutManager: NSLayoutManager) -> NSParagraphStyle? {
@@ -258,7 +310,8 @@ final class NoteLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
             })
         }
         let characters = characterRange(forGlyphRange: glyphsToShow, actualGlyphRange: nil)
-        for divider in DividerLine.ranges(in: string, overlapping: characters) {
+        for divider in DividerLine.ranges(in: string, overlapping: characters)
+        where !CodeBlock.isCodeLine(in: storage, at: divider.location) {
             let glyphs = NSIntersectionRange(glyphRange(forCharacterRange: divider, actualCharacterRange: nil), glyphsToShow)
             guard glyphs.length > 0 else { continue }
             replaced.append((glyphs, {

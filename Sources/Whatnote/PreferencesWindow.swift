@@ -127,6 +127,8 @@ final class PreferencesViewController: NSViewController {
     private let onRecordingChanged: (Bool) -> Void
     private let recorder: HotKeyRecorderView
     private let statusLabel = NSTextField(labelWithString: "")
+    private let doubleEscapeCheckbox = NSButton(checkboxWithTitle: "连按两次 Esc 关闭便签", target: nil, action: nil)
+    private let commandWCheckbox = NSButton(checkboxWithTitle: "按 ⌘W 关闭便签", target: nil, action: nil)
     private let launchCheckbox = NSButton(checkboxWithTitle: "登录时打开", target: nil, action: nil)
     private let launchHint = NSTextField(labelWithString: "")
     private let openLoginItemsButton = NSButton(title: "打开系统设置", target: nil, action: nil)
@@ -171,6 +173,18 @@ final class PreferencesViewController: NSViewController {
         let separator = NSBox()
         separator.boxType = .separator
 
+        let closeTip = "关闭的便签会移到“已完成的便签”"
+        doubleEscapeCheckbox.target = self
+        doubleEscapeCheckbox.action = #selector(toggleDoubleEscape)
+        doubleEscapeCheckbox.toolTip = closeTip
+        commandWCheckbox.target = self
+        commandWCheckbox.action = #selector(toggleCommandW)
+        commandWCheckbox.toolTip = closeTip
+        refreshCloseOptions()
+
+        let secondSeparator = NSBox()
+        secondSeparator.boxType = .separator
+
         launchCheckbox.target = self
         launchCheckbox.action = #selector(toggleLaunchAtLogin)
         openLoginItemsButton.target = self
@@ -182,20 +196,27 @@ final class PreferencesViewController: NSViewController {
         launchRow.alignment = .centerY
         launchRow.spacing = 10
 
-        let content = NSStackView(views: [shortcutRow, statusLabel, separator, launchRow, launchHint])
-        content.frame = NSRect(x: 0, y: 0, width: 360, height: 170)
+        let content = NSStackView(views: [
+            shortcutRow, statusLabel, separator,
+            doubleEscapeCheckbox, commandWCheckbox, secondSeparator,
+            launchRow, launchHint
+        ])
+        content.frame = NSRect(x: 0, y: 0, width: 360, height: 240)
         content.orientation = .vertical
         content.alignment = .leading
         content.spacing = 10
         content.edgeInsets = NSEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
         content.setCustomSpacing(14, after: statusLabel)
         content.setCustomSpacing(14, after: separator)
+        content.setCustomSpacing(14, after: commandWCheckbox)
+        content.setCustomSpacing(14, after: secondSeparator)
 
         NSLayoutConstraint.activate([
             recorder.widthAnchor.constraint(equalToConstant: 150),
             recorder.heightAnchor.constraint(equalToConstant: 26),
             content.widthAnchor.constraint(equalToConstant: 360),
-            separator.widthAnchor.constraint(equalToConstant: 320)
+            separator.widthAnchor.constraint(equalToConstant: 320),
+            secondSeparator.widthAnchor.constraint(equalToConstant: 320)
         ])
         view = content
         statusLabel.isHidden = true
@@ -232,6 +253,19 @@ final class PreferencesViewController: NSViewController {
     @objc private func toggleLaunchAtLogin() {
         let error = LaunchAtLogin.setEnabled(launchCheckbox.state == .on)
         refreshLaunchAtLogin(error: error)
+    }
+
+    private func refreshCloseOptions() {
+        doubleEscapeCheckbox.state = ClosePreferences.closesOnDoubleEscape() ? .on : .off
+        commandWCheckbox.state = ClosePreferences.closesOnCommandW() ? .on : .off
+    }
+
+    @objc private func toggleDoubleEscape() {
+        UserDefaults.standard.set(doubleEscapeCheckbox.state == .on, forKey: ClosePreferences.doubleEscapeKey)
+    }
+
+    @objc private func toggleCommandW() {
+        UserDefaults.standard.set(commandWCheckbox.state == .on, forKey: ClosePreferences.commandWKey)
     }
 
     @objc private func openLoginItems() {

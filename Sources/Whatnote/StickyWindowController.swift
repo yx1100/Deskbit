@@ -53,8 +53,10 @@ final class StickyWindowController: NSWindowController, NSWindowDelegate, NSText
         }
         rootView.textView.onDeleteBackward = { [weak self] in
             guard let self else { return false }
-            return RichTextFormatting.handleMarkerBackspace(in: self.rootView.textView)
+            return RichTextFormatting.handleCodeBackspace(in: self.rootView.textView)
+                || RichTextFormatting.handleMarkerBackspace(in: self.rootView.textView)
         }
+        rootView.textView.onCloseNote = { [weak self] in self?.didTapComplete() }
         let repairedBullets = RichTextFormatting.normalizeBulletMarkers(in: rootView.textView)
         let repairedTodos = RichTextFormatting.normalizeTodoMarkers(in: rootView.textView)
         if repairedBullets || repairedTodos {
@@ -125,6 +127,8 @@ final class StickyWindowController: NSWindowController, NSWindowDelegate, NSText
         }
         persistText()
         updateFormattingState()
+        // A code block's background spans lines the edit itself did not touch.
+        rootView.textView.needsDisplay = true
     }
 
     func textViewDidChangeSelection(_ notification: Notification) {

@@ -215,6 +215,9 @@ final class StickyTextView: NSTextView {
     var onAdjustBulletLevel: ((Int) -> Bool)?
     /// Returns true when it handled the key, e.g. removed a whole to-do marker.
     var onDeleteBackward: (() -> Bool)?
+    /// Closes the note, like the 完成 button; used by ⌘W and pressing Esc twice.
+    var onCloseNote: (() -> Void)?
+    private var lastEscapeTimestamp: TimeInterval?
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
@@ -285,6 +288,10 @@ final class StickyTextView: NSTextView {
             onEditLink?()
             return true
         }
+        if modifiers == [.command], key == "w", ClosePreferences.closesOnCommandW() {
+            onCloseNote?()
+            return true
+        }
         if let command = StickyEditingShortcut.command(for: modifiers, key: key) {
             switch command {
             case .copy: copy(nil)
@@ -295,6 +302,26 @@ final class StickyTextView: NSTextView {
             return true
         }
         return super.performKeyEquivalent(with: event)
+    }
+
+    override func keyDown(with event: NSEvent) {
+        if event.keyCode == 53, handleEscape(event) { return } // 53: Esc
+        super.keyDown(with: event)
+    }
+
+    /// Two presses of Esc in quick succession close the note. Esc still cancels input-method
+    /// composition, and a single press does nothing else in a note.
+    private func handleEscape(_ event: NSEvent) -> Bool {
+        let modifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
+        guard modifiers.isEmpty, !hasMarkedText(), ClosePreferences.closesOnDoubleEscape() else { return false }
+        if event.isARepeat { return true }
+        if let last = lastEscapeTimestamp, event.timestamp - last <= NSEvent.doubleClickInterval {
+            lastEscapeTimestamp = nil
+            onCloseNote?()
+        } else {
+            lastEscapeTimestamp = event.timestamp
+        }
+        return true
     }
 
     override func insertNewline(_ sender: Any?) {

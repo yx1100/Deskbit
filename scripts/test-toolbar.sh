@@ -12,6 +12,8 @@ swiftc \
   "$project_dir/Sources/Whatnote/NoteMedia.swift" \
   "$project_dir/Sources/Whatnote/NoteChrome.swift" \
   "$project_dir/Sources/Whatnote/TodoCheckbox.swift" \
+  "$project_dir/Sources/Whatnote/CodeBlock.swift" \
+  "$project_dir/Sources/Whatnote/ClosePreferences.swift" \
   "$project_dir/Sources/Whatnote/StickyViews.swift" \
   "$project_dir/Tests/ToolbarProbe.swift" \
   -o "$probe_binary"
