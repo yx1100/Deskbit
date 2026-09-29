@@ -131,6 +131,14 @@ final class StickyWindowController: NSWindowController, NSWindowDelegate, NSText
         rootView.textView.needsDisplay = true
     }
 
+    func textView(
+        _ textView: NSTextView,
+        willChangeSelectionFromCharacterRange oldSelectedCharRange: NSRange,
+        toCharacterRange newSelectedCharRange: NSRange
+    ) -> NSRange {
+        RichTextFormatting.selectionAvoidingDividers(newSelectedCharRange, from: oldSelectedCharRange, in: textView)
+    }
+
     func textViewDidChangeSelection(_ notification: Notification) {
         RichTextFormatting.leaveCodeStyleOnEmptyLastLine(in: rootView.textView)
         updateFormattingState()

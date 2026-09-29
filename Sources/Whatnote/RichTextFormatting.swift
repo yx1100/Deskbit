@@ -369,6 +369,24 @@ enum RichTextFormatting {
         setTypingTodoCompletion(false, textView: textView)
     }
 
+    /// Keeps the cursor off divider lines. A divider is "---" drawn as a line, so a cursor
+    /// placed between its dashes would sit in the middle of the line. Moving backwards lands at
+    /// the end of the line above; clicks and other moves land at the start of the line below.
+    static func selectionAvoidingDividers(_ proposed: NSRange, from old: NSRange, in textView: NSTextView) -> NSRange {
+        guard proposed.length == 0, let storage = textView.textStorage, proposed.location < storage.length else { return proposed }
+        let string = storage.string as NSString
+        let paragraph = string.paragraphRange(for: NSRange(location: proposed.location, length: 0))
+        // A divider still being typed at the very end of the note has no line below yet.
+        guard string.character(at: NSMaxRange(paragraph) - 1) == 0x0A,
+              DividerLine.isDivider(string.substring(with: NSRange(location: paragraph.location, length: paragraph.length - 1))),
+              !CodeBlock.isCodeLine(in: storage, at: paragraph.location) else { return proposed }
+        let isMouse = NSApp?.currentEvent.map { [.leftMouseDown, .leftMouseDragged, .leftMouseUp].contains($0.type) } ?? false
+        if !isMouse, proposed.location < old.location, paragraph.location > 0 {
+            return NSRange(location: paragraph.location - 1, length: 0)
+        }
+        return NSRange(location: NSMaxRange(paragraph), length: 0)
+    }
+
     /// Puts a "---" divider on its own line at the cursor and moves the cursor below it.
     static func insertDivider(in textView: NSTextView) {
         guard let storage = textView.textStorage else { return }
