@@ -568,10 +568,8 @@ enum RichTextFormatting {
 
         let taskState = todoState(in: storage.string, at: paragraph.location)
         if taskState != .plain {
-            let marker = taskState == .pending ? pendingTodoMarker : completedTodoMarker
-            let content = nsString.substring(with: paragraph).trimmingCharacters(in: .whitespacesAndNewlines)
             setTypingTodoCompletion(false, textView: textView)
-            if content == marker {
+            if isEmptyItem(paragraph, markerLength: 2, in: nsString) {
                 storage.replaceCharacters(in: NSRange(location: paragraph.location, length: 2), with: "")
                 textView.setSelectedRange(NSRange(location: paragraph.location, length: 0))
                 textView.didChangeText()
@@ -591,8 +589,7 @@ enum RichTextFormatting {
         }
 
         if let ordered = orderedMarker(in: storage.string, at: paragraph.location) {
-            let content = nsString.substring(with: paragraph).trimmingCharacters(in: .whitespacesAndNewlines)
-            if content == "\(ordered.number)." {
+            if isEmptyItem(paragraph, markerLength: ordered.length, in: nsString) {
                 // Return on an empty numbered item ends the list.
                 let markerRange = NSRange(location: paragraph.location, length: ordered.length)
                 guard textView.shouldChangeText(in: markerRange, replacementString: "") else { return true }
@@ -610,8 +607,7 @@ enum RichTextFormatting {
             return endHeadingOnNewline(in: textView, selection: selection)
         }
 
-        let content = nsString.substring(with: paragraph).trimmingCharacters(in: .whitespacesAndNewlines)
-        if content == marker {
+        if isEmptyItem(paragraph, markerLength: 2, in: nsString) {
             storage.replaceCharacters(in: NSRange(location: paragraph.location, length: 2), with: "")
             setTypingListIndent(false, textView: textView)
             textView.setSelectedRange(NSRange(location: paragraph.location, length: 0))
@@ -620,6 +616,15 @@ enum RichTextFormatting {
             textView.insertText("\n\(marker) ", replacementRange: selection)
         }
         return true
+    }
+
+    /// An item is empty only when nothing at all follows its marker; even a typed space counts as content.
+    private static func isEmptyItem(_ paragraph: NSRange, markerLength: Int, in string: NSString) -> Bool {
+        var end = NSMaxRange(paragraph)
+        while end > paragraph.location, [0x0A, 0x0D, 0x2029].contains(string.character(at: end - 1)) {
+            end -= 1
+        }
+        return end - paragraph.location <= markerLength
     }
 
     /// Return at the end of a heading starts a normal body paragraph.

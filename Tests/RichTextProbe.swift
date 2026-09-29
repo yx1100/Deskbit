@@ -281,7 +281,27 @@ struct RichTextProbe {
             && (emptyDividerEditor.textStorage?.attribute(.font, at: 0, effectiveRange: nil) as? NSFont)?.pointSize == NoteAppearance.bodyFontSize
         let dividers = dividerPatterns && dividerMidLine && dividerRanges && dividerEmpty
 
-        let checkboxClicks = firstChecked && secondUnchecked && plainIgnored && buttonAdds && buttonRemoves && orderedList && dividers
+        // A list item holding only a typed space is not empty: Return starts the next item.
+        var spaceContinues = true
+        for (text, expected) in [("• ", "• \n• "), ("☐ ", "☐ \n☐ "), ("1. ", "1. \n2. ")] {
+            let editor = NSTextView()
+            editor.isRichText = true
+            editor.string = text + " "
+            editor.setSelectedRange(NSRange(location: editor.string.utf16.count, length: 0))
+            spaceContinues = spaceContinues
+                && RichTextFormatting.handleStructuredNewline(in: editor)
+                && editor.string == text + " " + String(expected.dropFirst(text.count))
+        }
+        var emptyEnds = true
+        for text in ["• ", "☐ ", "1. "] {
+            let editor = NSTextView()
+            editor.isRichText = true
+            editor.string = text
+            editor.setSelectedRange(NSRange(location: editor.string.utf16.count, length: 0))
+            emptyEnds = emptyEnds && RichTextFormatting.handleStructuredNewline(in: editor) && editor.string.isEmpty
+        }
+
+        let checkboxClicks = firstChecked && secondUnchecked && plainIgnored && buttonAdds && buttonRemoves && orderedList && dividers && spaceContinues && emptyEnds
             && todoBackspace && bulletBackspace && ordinaryBackspace && repaired
 
         let extendedMarkdown = strikeMarkdown && headingMarkdown && italicMarkdown && arithmeticUntouched
