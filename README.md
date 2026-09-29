@@ -151,8 +151,8 @@ Markdown 语法在输入或粘贴时自动转换为对应格式。在标题行�
 在 Apple Silicon Mac 上安装 Xcode 命令行工具（Command Line Tools）后执行：
 
 ```bash
-git clone https://github.com/yx1100/Deskbit.git
-cd Deskbit
+git clone https://github.com/yx1100/whatnote.git
+cd whatnote
 ./scripts/build-app.sh
 open "dist/Whatnote.app"
 ```
