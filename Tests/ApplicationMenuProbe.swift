@@ -12,7 +12,10 @@ struct ApplicationMenuProbe {
               let editMenu = mainMenu.items[2].submenu else { exit(1) }
         guard appMenu.items.contains(where: { $0.title == "设置…" && $0.keyEquivalent == "," }),
               fileMenu.items.first?.title == "新建便签",
-              fileMenu.items.first?.keyEquivalent == "n" else { exit(6) }
+              fileMenu.items.first?.keyEquivalent == "n",
+              fileMenu.items.contains(where: {
+                  $0.title == "关闭窗口" && $0.action == #selector(NSWindow.performClose(_:)) && $0.keyEquivalent == "w"
+              }) else { exit(6) }
 
         let commands = editMenu.items.compactMap { item -> (String, Selector?, String)? in
             guard !item.isSeparatorItem else { return nil }
