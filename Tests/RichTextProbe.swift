@@ -485,21 +485,21 @@ struct RichTextProbe {
         print("codeButton on=\(codeButtonOn) off=\(codeButtonOff) empty=\(emptyCodeStarted)")
 
         // The cursor never rests on a divider line.
-        let dividerEditor = NSTextView()
-        dividerEditor.isRichText = true
-        dividerEditor.string = "上\n---\n下"
+        let dividerCursorEditor = NSTextView()
+        dividerCursorEditor.isRichText = true
+        dividerCursorEditor.string = "上\n---\n下"
         let clickedDivider = RichTextFormatting.selectionAvoidingDividers(
-            NSRange(location: 3, length: 0), from: NSRange(location: 0, length: 0), in: dividerEditor
+            NSRange(location: 3, length: 0), from: NSRange(location: 0, length: 0), in: dividerCursorEditor
         ) == NSRange(location: 6, length: 0)
         let backIntoDivider = RichTextFormatting.selectionAvoidingDividers(
-            NSRange(location: 5, length: 0), from: NSRange(location: 6, length: 0), in: dividerEditor
+            NSRange(location: 5, length: 0), from: NSRange(location: 6, length: 0), in: dividerCursorEditor
         ) == NSRange(location: 1, length: 0)
         let plainLineUntouched = RichTextFormatting.selectionAvoidingDividers(
-            NSRange(location: 7, length: 0), from: NSRange(location: 0, length: 0), in: dividerEditor
+            NSRange(location: 7, length: 0), from: NSRange(location: 0, length: 0), in: dividerCursorEditor
         ) == NSRange(location: 7, length: 0)
-        dividerEditor.string = "上\n---"
+        dividerCursorEditor.string = "上\n---"
         let typingDividerUntouched = RichTextFormatting.selectionAvoidingDividers(
-            NSRange(location: 5, length: 0), from: NSRange(location: 4, length: 0), in: dividerEditor
+            NSRange(location: 5, length: 0), from: NSRange(location: 4, length: 0), in: dividerCursorEditor
         ) == NSRange(location: 5, length: 0)
         let dividerCursor = clickedDivider && backIntoDivider && plainLineUntouched && typingDividerUntouched
         print("dividerCursor click=\(clickedDivider) back=\(backIntoDivider) plain=\(plainLineUntouched) typing=\(typingDividerUntouched)")
