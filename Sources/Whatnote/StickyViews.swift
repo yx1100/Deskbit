@@ -29,7 +29,7 @@ final class StickyToolbarView: NSView {
 
     init(color: NoteColor, isPinned: Bool) {
         arrangeButton = NoteToolButton(
-            symbol: "rectangle.3.group",
+            symbol: "square.grid.2x2",
             tip: "排列便签",
             action: #selector(StickyToolbarView.arrangeNotes)
         )
@@ -54,7 +54,7 @@ final class StickyToolbarView: NSView {
 
         let leadingCapsule = GlassCapsuleView(views: [completeButton])
         let colorCapsule = GlassCapsuleView(views: colorButtons, horizontalPadding: 5)
-        let actionCapsule = GlassCapsuleView(views: [newButton, pinButton, arrangeButton])
+        let actionCapsule = GlassCapsuleView(views: [newButton, pinButton, arrangeButton], horizontalPadding: 3, spacing: 2)
         for capsule in [leadingCapsule, colorCapsule, actionCapsule] {
             addSubview(capsule)
         }
