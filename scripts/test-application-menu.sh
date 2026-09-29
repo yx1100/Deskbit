@@ -6,6 +6,7 @@ probe_binary="$(mktemp /tmp/whatnote-application-menu.XXXXXX)"
 trap 'rm -f "$probe_binary"' EXIT
 
 swiftc \
+  "$project_dir/Sources/Whatnote/StatusMenu.swift" \
   "$project_dir/Sources/Whatnote/ApplicationMenu.swift" \
   "$project_dir/Tests/ApplicationMenuProbe.swift" \
   -o "$probe_binary"

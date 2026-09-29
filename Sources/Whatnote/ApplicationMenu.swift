@@ -10,7 +10,7 @@ enum ApplicationMenu {
         appMenu.addItem(withTitle: "关于随便记", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
         appMenu.addItem(.separator())
         // Sent up the responder chain to the app delegate.
-        appMenu.addItem(withTitle: "设置…", action: Selector(("showPreferencesFromMenu")), keyEquivalent: ",")
+        appMenu.addItem(withTitle: "设置…", action: #selector(AppStatusMenuTarget.showPreferencesFromMenu), keyEquivalent: ",")
         appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "退出随便记", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         appItem.submenu = appMenu
@@ -18,7 +18,7 @@ enum ApplicationMenu {
 
         let fileItem = NSMenuItem(title: "文件", action: nil, keyEquivalent: "")
         let fileMenu = NSMenu(title: "文件")
-        fileMenu.addItem(withTitle: "新建便签", action: Selector(("newNoteFromMenu")), keyEquivalent: "n")
+        fileMenu.addItem(withTitle: "新建便签", action: #selector(AppStatusMenuTarget.newNoteFromMenu), keyEquivalent: "n")
         fileItem.submenu = fileMenu
         mainMenu.addItem(fileItem)
 
