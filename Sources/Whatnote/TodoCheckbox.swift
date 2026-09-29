@@ -263,26 +263,13 @@ final class NoteLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
             )
         }
         let characters = characterRange(forGlyphRange: glyphsToShow, actualGlyphRange: nil)
-        var areas = CodeBlock.blocks(in: storage, overlapping: characters).compactMap { block -> NSRect? in
+        let areas = CodeBlock.blocks(in: storage, overlapping: characters).compactMap { block -> NSRect? in
             let glyphs = glyphRange(forCharacterRange: block, actualCharacterRange: nil)
             guard glyphs.length > 0 else { return nil }
             return area(
                 top: lineFragmentRect(forGlyphAt: glyphs.location, effectiveRange: nil),
                 bottom: lineFragmentRect(forGlyphAt: NSMaxRange(glyphs) - 1, effectiveRange: nil)
             )
-        }
-        // An empty last line typed in code style has no characters yet.
-        if extraLineFragmentTextContainer != nil, let textView = firstTextView,
-           textView.selectedRange().location == storage.length,
-           CodeBlock.isCodeStyle(textView.typingAttributes[.paragraphStyle] as? NSParagraphStyle) {
-            let extra = extraLineFragmentRect
-            if let last = areas.last, abs(last.maxY - extra.minY) < lineHeight {
-                areas[areas.count - 1] = NSRect(x: last.minX, y: last.minY, width: last.width,
-                                                height: extra.minY + lineHeight + CodeBlock.verticalPadding - last.minY)
-            } else {
-                areas.append(NSRect(x: extra.minX + padding, y: extra.minY, width: extra.width - 2 * padding,
-                                    height: lineHeight + CodeBlock.verticalPadding))
-            }
         }
         for rect in areas {
             CodeBlock.draw(in: rect.offsetBy(dx: origin.x, dy: origin.y))

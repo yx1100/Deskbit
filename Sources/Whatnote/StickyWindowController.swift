@@ -132,6 +132,7 @@ final class StickyWindowController: NSWindowController, NSWindowDelegate, NSText
     }
 
     func textViewDidChangeSelection(_ notification: Notification) {
+        RichTextFormatting.leaveCodeStyleOnEmptyLastLine(in: rootView.textView)
         updateFormattingState()
     }
 

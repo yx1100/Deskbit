@@ -336,6 +336,23 @@ final class StickyTextView: NSTextView {
         return true
     }
 
+    /// The first line of a code block holds padding above its text; keep the caret to the text.
+    override func drawInsertionPoint(in rect: NSRect, color: NSColor, turnedOn flag: Bool) {
+        super.drawInsertionPoint(in: caretRect(from: rect), color: color, turnedOn: flag)
+    }
+
+    private func caretRect(from rect: NSRect) -> NSRect {
+        guard let storage = textStorage, let layoutManager, storage.length > 0 else { return rect }
+        let location = selectedRange().location
+        guard location < storage.length else { return rect }
+        let paragraphStart = (storage.string as NSString).paragraphRange(for: NSRange(location: location, length: 0)).location
+        guard CodeBlock.isFirstLine(in: storage, at: paragraphStart) else { return rect }
+        let caretLine = layoutManager.lineFragmentRect(forGlyphAt: layoutManager.glyphIndexForCharacter(at: location), effectiveRange: nil)
+        let firstLine = layoutManager.lineFragmentRect(forGlyphAt: layoutManager.glyphIndexForCharacter(at: paragraphStart), effectiveRange: nil)
+        guard caretLine.minY == firstLine.minY, rect.height > CodeBlock.verticalPadding else { return rect }
+        return NSRect(x: rect.minX, y: rect.minY + CodeBlock.verticalPadding, width: rect.width, height: rect.height - CodeBlock.verticalPadding)
+    }
+
     override func insertNewline(_ sender: Any?) {
         if onStructuredNewline?() == true { return }
         super.insertNewline(sender)
@@ -413,6 +430,14 @@ final class StickyTextView: NSTextView {
     }
 }
 
+/// A scroller without the white track that "always show scroll bars" draws, so the note's
+/// color shows behind the knob.
+final class NoteScroller: NSScroller {
+    override class var isCompatibleWithOverlayScrollers: Bool { true }
+
+    override func drawKnobSlot(in slotRect: NSRect, highlight flag: Bool) {}
+}
+
 /// A note: colored paper whose text scrolls underneath two floating glass bars.
 final class StickyRootView: NSView {
     let toolbar: StickyToolbarView
@@ -434,6 +459,7 @@ final class StickyRootView: NSView {
 
         scrollView.drawsBackground = false
         scrollView.hasVerticalScroller = true
+        scrollView.verticalScroller = NoteScroller()
         scrollView.autohidesScrollers = true
         scrollView.borderType = .noBorder
         scrollView.translatesAutoresizingMaskIntoConstraints = false

@@ -398,8 +398,9 @@ struct RichTextProbe {
         orphanBulletEditor.setSelectedRange(NSRange(location: 2, length: 0))
         let orphanPrevented = !RichTextFormatting.adjustBulletLevel(in: orphanBulletEditor, delta: 1)
 
-        // Code blocks: "```" and Return starts one, Markdown inside stays as typed, Return on the
-        // empty last line ends it, Backspace on its first line undoes it, and it survives saving.
+        // Code blocks: "```" and Return starts one, Markdown inside stays as typed, Return on an
+        // empty line stays in the block, a closing fence ends it, Backspace on its first line
+        // undoes it, and it survives saving.
         let codeBlockEditor = NSTextView()
         codeBlockEditor.isRichText = true
         codeBlockEditor.allowsUndo = true
@@ -418,17 +419,37 @@ struct RichTextProbe {
         let codeContinues = RichTextFormatting.handleStructuredNewline(in: codeBlockEditor)
             && codeBlockEditor.string == "说明\n**x** = 1\n\n"
             && CodeBlock.isCodeLine(in: codeStorage, at: 13)
-        let codeEnds = RichTextFormatting.handleStructuredNewline(in: codeBlockEditor)
-            && codeBlockEditor.string == "说明\n**x** = 1\n\n"
+        // An empty line stays in the block; only a closing fence ends it.
+        let emptyLineContinues = RichTextFormatting.handleStructuredNewline(in: codeBlockEditor)
+            && codeBlockEditor.string == "说明\n**x** = 1\n\n\n"
+            && CodeBlock.isCodeLine(in: codeStorage, at: 14)
+        codeBlockEditor.insertText("```", replacementRange: codeBlockEditor.selectedRange())
+        let codeEnds = emptyLineContinues
+            && RichTextFormatting.handleStructuredNewline(in: codeBlockEditor)
+            && codeBlockEditor.string == "说明\n**x** = 1\n\n\n"
             && CodeBlock.isCodeLine(in: codeStorage, at: 3)
-            && !CodeBlock.isCodeLine(in: codeStorage, at: 13)
+            && CodeBlock.isCodeLine(in: codeStorage, at: 13)
+            && !CodeBlock.isCodeLine(in: codeStorage, at: 14)
+            && codeBlockEditor.selectedRange().location == 14
         let codeRoundTrip = RichTextCodec.encode(codeBlockEditor.attributedString())
             .flatMap(RichTextCodec.decode)
             .map { CodeBlock.isCodeLine(in: $0, at: 3) && !CodeBlock.isCodeLine(in: $0, at: 0) } ?? false
         codeBlockEditor.setSelectedRange(NSRange(location: 3, length: 0))
         let codeBackspace = RichTextFormatting.handleCodeBackspace(in: codeBlockEditor)
             && !CodeBlock.isCodeLine(in: codeStorage, at: 3)
-            && codeBlockEditor.string == "说明\n**x** = 1\n\n"
+            && codeBlockEditor.string == "说明\n**x** = 1\n\n\n"
+
+        // Clicking the empty line after a block at the end of the note types plain text.
+        let trailingEditor = NSTextView()
+        trailingEditor.isRichText = true
+        RichTextFormatting.toggleCodeBlock(in: trailingEditor)
+        trailingEditor.setSelectedRange(NSRange(location: 1, length: 0))
+        trailingEditor.typingAttributes = CodeBlock.attributes()
+        RichTextFormatting.leaveCodeStyleOnEmptyLastLine(in: trailingEditor)
+        let trailingLinePlain = !CodeBlock.isCodeStyle(trailingEditor.typingAttributes[.paragraphStyle] as? NSParagraphStyle)
+            && !RichTextFormatting.isCodeBlock(in: trailingEditor)
+            && CodeBlock.isCodeLine(in: trailingEditor.textStorage!, at: 0)
+        print("codeBlock trailingPlain=\(trailingLinePlain)")
 
         let pastedCodeEditor = convertedEditor("前\n```swift\nlet a = 1\n# 不是标题\n```\n后")
         let pastedCodeStorage = pastedCodeEditor.textStorage!
@@ -463,7 +484,7 @@ struct RichTextProbe {
         let codeButton = codeButtonOn && codeButtonOff && emptyCodeStarted
         print("codeButton on=\(codeButtonOn) off=\(codeButtonOff) empty=\(emptyCodeStarted)")
 
-        let codeBlocks = codeButton && fenceStarted && codeKeepsMarkdown && codeContinues && codeEnds && codeRoundTrip && codeBackspace && pastedCode
+        let codeBlocks = codeButton && trailingLinePlain && fenceStarted && codeKeepsMarkdown && codeContinues && codeEnds && codeRoundTrip && codeBackspace && pastedCode
         print("codeBlock start=\(fenceStarted) keepsMarkdown=\(codeKeepsMarkdown) continues=\(codeContinues) ends=\(codeEnds) roundTrip=\(codeRoundTrip) backspace=\(codeBackspace) pasted=\(pastedCode)")
 
         print("bold=\(boldSurvived) legacyStrike=\(strikeSurvived) todo=\(todoPending && todoCompleted && todoRemoved && todoSurvived && todoSelectionPreserved && completedTodoNewline && splitCompletedTodo) bullet=\(bulletSurvived) futureBold=\(futureBoldOn && futureBoldOff) bulletToggle=\(bulletsOn && bulletsOff && bulletSelectionPreserved && bulletBecameTodo && todoBecameBullet) markdown=\(markdownChanged && markdownBold && markdownBullets && extendedMarkdown && trailingIsRegular) listExit=\(listExitClean) nesting=\(multiLevelOn && multiLevelOff && multiLevelSurvived && orphanPrevented && tieredMarkers && inheritedMarker && normalizedLegacyMarker) markerProportions=\(markerProportionsAreBalanced) bytes=\(data.count)")

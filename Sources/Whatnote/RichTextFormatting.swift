@@ -673,11 +673,6 @@ enum RichTextFormatting {
         let atEmptyLastLine = selection.location >= storage.length
             && (storage.length == 0 || nsString.character(at: storage.length - 1) == 0x0A)
         if atEmptyLastLine {
-            if CodeBlock.isCodeStyle(textView.typingAttributes[.paragraphStyle] as? NSParagraphStyle) {
-                textView.typingAttributes = CodeBlock.bodyAttributes()
-                textView.needsDisplay = true
-                return
-            }
             // Give the new block a real line so it has something to draw.
             let end = NSRange(location: storage.length, length: 0)
             let attributes = CodeBlock.attributes()
@@ -710,17 +705,27 @@ enum RichTextFormatting {
     }
 
     static func isCodeBlock(in textView: NSTextView) -> Bool {
-        guard let storage = textView.textStorage else { return false }
-        let location = textView.selectedRange().location
-        if location >= storage.length,
-           storage.length == 0 || (storage.string as NSString).character(at: storage.length - 1) == 0x0A {
-            return CodeBlock.isCodeStyle(textView.typingAttributes[.paragraphStyle] as? NSParagraphStyle)
-        }
-        return CodeBlock.isCodeLine(in: storage, at: min(location, storage.length - 1))
+        guard let storage = textView.textStorage, !isAtEmptyLastLine(textView) else { return false }
+        return CodeBlock.isCodeLine(in: storage, at: min(textView.selectedRange().location, storage.length - 1))
     }
 
-    /// Return in code: a fence line ("```") starts a code block, Return inside one adds a code line,
-    /// and Return on the empty last line or on a closing fence ends the block.
+    /// Code lines always end with their own newline, so the empty line after a block at the
+    /// end of the note is plain text. Clicking there must not keep typing in code style.
+    static func leaveCodeStyleOnEmptyLastLine(in textView: NSTextView) {
+        guard isAtEmptyLastLine(textView),
+              CodeBlock.isCodeStyle(textView.typingAttributes[.paragraphStyle] as? NSParagraphStyle) else { return }
+        textView.typingAttributes = CodeBlock.bodyAttributes()
+    }
+
+    private static func isAtEmptyLastLine(_ textView: NSTextView) -> Bool {
+        guard let storage = textView.textStorage else { return false }
+        let selection = textView.selectedRange()
+        return selection.length == 0 && selection.location >= storage.length
+            && (storage.length == 0 || (storage.string as NSString).character(at: storage.length - 1) == 0x0A)
+    }
+
+    /// Return in code: a fence line ("```") starts a code block, Return inside one adds a code line
+    /// (empty lines included), and Return on a closing fence ends the block.
     /// Returns nil when the cursor is not in a code block or on a fence.
     private static func handleCodeNewline(in textView: NSTextView, selection: NSRange) -> Bool? {
         guard let storage = textView.textStorage else { return nil }
@@ -733,9 +738,7 @@ enum RichTextFormatting {
         let hasNewline = paragraph.length > 0 && nsString.character(at: NSMaxRange(paragraph) - 1) == 0x0A
         let content = NSRange(location: paragraph.location, length: paragraph.length - (hasNewline ? 1 : 0))
         let line = nsString.substring(with: content)
-        let isCode = atEmptyLastLine
-            ? CodeBlock.isCodeStyle(textView.typingAttributes[.paragraphStyle] as? NSParagraphStyle)
-            : CodeBlock.isCodeLine(in: storage, at: paragraph.location)
+        let isCode = !atEmptyLastLine && CodeBlock.isCodeLine(in: storage, at: paragraph.location)
 
         /// Replaces the whole line with an empty one in the given style and puts the cursor on it.
         func resetLine(to attributes: [NSAttributedString.Key: Any]) -> Bool {
@@ -752,8 +755,7 @@ enum RichTextFormatting {
         }
 
         if isCode {
-            let isLastLine = !CodeBlock.isCodeLine(in: storage, at: NSMaxRange(paragraph))
-            if CodeBlock.isFence(line) || (line.isEmpty && isLastLine) {
+            if CodeBlock.isFence(line) {
                 return resetLine(to: CodeBlock.bodyAttributes())
             }
             let attributes = CodeBlock.attributes()
