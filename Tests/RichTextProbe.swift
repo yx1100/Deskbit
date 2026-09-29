@@ -75,6 +75,7 @@ struct RichTextProbe {
             && RichTextFormatting.todoState(in: todoEditor) == .plain
             && todoEditor.textStorage?.attribute(.strikethroughStyle, at: 0, effectiveRange: nil) == nil
         let todoSelectionPreserved = todoEditor.selectedRange() == NSRange(location: 0, length: todoEditor.string.utf16.count)
+        print("todo parts: pending=\(todoPending) completed=\(todoCompleted) survived=\(todoSurvived) removed=\(todoRemoved) selection=\(todoSelectionPreserved) \(todoEditor.selectedRange())")
 
         let completedTodoNewlineEditor = NSTextView()
         completedTodoNewlineEditor.isRichText = true
@@ -108,6 +109,7 @@ struct RichTextProbe {
             && splitCompletedTodoEditor.string == "☑ 前\n☐ 后"
             && splitCompletedTodoEditor.textStorage?.attribute(.strikethroughStyle, at: 2, effectiveRange: nil) != nil
             && splitCompletedTodoEditor.textStorage?.attribute(.strikethroughStyle, at: 6, effectiveRange: nil) == nil
+        print("todo newline parts: continued=\(completedTodoNewline) split=\(splitCompletedTodo) strings=\(completedTodoNewlineEditor.string.debugDescription) \(splitCompletedTodoEditor.string.debugDescription)")
 
         let bulletEditor = NSTextView()
         bulletEditor.isRichText = true

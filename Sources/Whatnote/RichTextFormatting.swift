@@ -134,6 +134,8 @@ enum RichTextFormatting {
         let paragraph = (storage.string as NSString).paragraphRange(for: NSRange(location: start, length: 0))
         // Registering the whole paragraph lets undo restore both the marker and the strikethrough.
         guard textView.shouldChangeText(in: paragraph, replacementString: nil) else { return false }
+        // Ticking a box should not move the cursor; the edit keeps the text length.
+        let savedSelection = textView.selectedRanges
         let completed = state == .pending
         storage.beginEditing()
         storage.replaceCharacters(
@@ -142,6 +144,7 @@ enum RichTextFormatting {
         )
         applyTodoCompletion(completed, storage: storage, paragraphStart: start)
         storage.endEditing()
+        textView.selectedRanges = savedSelection
         textView.didChangeText()
         return true
     }
