@@ -154,6 +154,8 @@ final class StickyFormattingFooterView: NSView {
             symbol: "chevron.left.forwardslash.chevron.right",
             fallbackSymbol: "curlybraces",
             tip: "代码块",
+            // The wide </> glyph looks larger than the other icons at 13 pt.
+            pointSize: 11,
             action: #selector(StickyFormattingFooterView.toggleCodeBlock)
         )
         imageButton = NoteToolButton(
