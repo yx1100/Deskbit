@@ -505,7 +505,7 @@ struct RichTextProbe {
         dividerCursorEditor.setSelectedRange(NSRange(location: 6, length: 0))
         let backspaceBelow = RichTextFormatting.handleDividerBackspace(in: dividerCursorEditor)
             && dividerCursorEditor.string == "上\n--\n下"
-            && dividerCursorEditor.selectedRange().location == 5
+            && dividerCursorEditor.selectedRange().location == 4
         dividerCursorEditor.string = "上\n---\n下"
         dividerCursorEditor.setSelectedRange(NSRange(location: 2, length: 0))
         let backspaceAtDivider = !RichTextFormatting.handleDividerBackspace(in: dividerCursorEditor)

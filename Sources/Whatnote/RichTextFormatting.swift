@@ -389,9 +389,9 @@ enum RichTextFormatting {
         return NSRange(location: divider.location, length: 0)
     }
 
-    /// Backspace at the start of the line below a divider deletes the divider's last dash,
-    /// like the character before the cursor, rather than the hidden line break. At a divider's
-    /// left end Backspace works as usual and joins it to the line above.
+    /// Backspace at the start of the line below a divider deletes the divider's last dash
+    /// rather than the hidden line break, and moves the cursor to where that dash was.
+    /// At a divider's left end Backspace works as usual and joins it to the line above.
     static func handleDividerBackspace(in textView: NSTextView) -> Bool {
         guard let storage = textView.textStorage else { return false }
         let selection = textView.selectedRange()
@@ -402,7 +402,7 @@ enum RichTextFormatting {
         let lastDash = NSRange(location: selection.location - 2, length: 1)
         guard textView.shouldChangeText(in: lastDash, replacementString: "") else { return true }
         storage.replaceCharacters(in: lastDash, with: "")
-        textView.setSelectedRange(NSRange(location: selection.location - 1, length: 0))
+        textView.setSelectedRange(NSRange(location: lastDash.location, length: 0))
         textView.didChangeText()
         return true
     }
