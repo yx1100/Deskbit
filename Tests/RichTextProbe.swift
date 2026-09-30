@@ -516,7 +516,46 @@ struct RichTextProbe {
             && typingDividerUntouched && backspaceBelow && backspaceAtDivider && ordinaryBackspaceIgnored
         print("dividerCursor click=\(clickedDivider) back=\(backIntoDivider) right=\(rightFromDivider) plain=\(plainLineUntouched) typing=\(typingDividerUntouched) backspaceBelow=\(backspaceBelow) backspaceAt=\(backspaceAtDivider) ordinary=\(ordinaryBackspaceIgnored)")
 
-        let codeBlocks = dividerCursor && codeButton && trailingLinePlain && fenceStarted && codeKeepsMarkdown && codeContinues && codeEnds && codeRoundTrip && codeBackspace && pastedCode
+        // List markers: the space after a marker is a gap the cursor skips; pasted markers
+        // are dropped where they would show up mid-line.
+        let markerLengths = ListMarker.length(in: "☐ 买", atParagraphStart: 0) == 2
+            && ListMarker.length(in: "• 项", atParagraphStart: 0) == 2
+            && ListMarker.length(in: "12. 项", atParagraphStart: 0) == 4
+            && ListMarker.length(in: "1.项", atParagraphStart: 0) == nil
+            && ListMarker.length(in: "普通", atParagraphStart: 0) == nil
+            && ListMarker.isMarkerSpace(in: "• 项", at: 1)
+            && !ListMarker.isMarkerSpace(in: "普 通", at: 1)
+        let markerCursorEditor = NSTextView()
+        markerCursorEditor.isRichText = true
+        markerCursorEditor.string = "上\n☐ 买\n1. 二"
+        func skipped(_ location: Int, from old: Int, userMove: Bool = true) -> Int {
+            RichTextFormatting.selectionAvoidingListMarkers(
+                NSRange(location: location, length: 0),
+                from: NSRange(location: old, length: 0),
+                isUserMove: userMove,
+                in: markerCursorEditor
+            ).location
+        }
+        let markerCursor = skipped(3, from: 0) == 4 && skipped(2, from: 0) == 4
+            && skipped(3, from: 4) == 1 && skipped(7, from: 0) == 9
+            && skipped(4, from: 0) == 4 && skipped(3, from: 0, userMove: false) == 3
+        func pasted(_ text: String, into existing: String, at location: Int) -> String {
+            let editor = NSTextView()
+            editor.isRichText = true
+            editor.string = existing
+            editor.setSelectedRange(NSRange(location: location, length: 0))
+            return RichTextFormatting.textForPaste(text, in: editor)
+        }
+        let pasteMarkers = pasted("☐ 随便记", into: "☐ ", at: 2) == "随便记"
+            && pasted("☐ 随便记", into: "文字", at: 2) == "随便记"
+            && pasted("• 项目", into: "• ", at: 2) == "项目"
+            && pasted("1. 一", into: "文字", at: 2) == "1. 一"
+            && pasted("☐ 随便记", into: "", at: 0) == "☐ 随便记"
+            && pasted("☐ 随便记", into: "文字\n", at: 3) == "☐ 随便记"
+        let listMarkers = markerLengths && markerCursor && pasteMarkers
+        print("listMarkers lengths=\(markerLengths) cursor=\(markerCursor) paste=\(pasteMarkers)")
+
+        let codeBlocks = listMarkers && dividerCursor && codeButton && trailingLinePlain && fenceStarted && codeKeepsMarkdown && codeContinues && codeEnds && codeRoundTrip && codeBackspace && pastedCode
         print("codeBlock start=\(fenceStarted) keepsMarkdown=\(codeKeepsMarkdown) continues=\(codeContinues) ends=\(codeEnds) roundTrip=\(codeRoundTrip) backspace=\(codeBackspace) pasted=\(pastedCode)")
 
         print("bold=\(boldSurvived) legacyStrike=\(strikeSurvived) todo=\(todoPending && todoCompleted && todoRemoved && todoSurvived && todoSelectionPreserved && completedTodoNewline && splitCompletedTodo) bullet=\(bulletSurvived) futureBold=\(futureBoldOn && futureBoldOff) bulletToggle=\(bulletsOn && bulletsOff && bulletSelectionPreserved && bulletBecameTodo && todoBecameBullet) markdown=\(markdownChanged && markdownBold && markdownBullets && extendedMarkdown && trailingIsRegular) listExit=\(listExitClean) nesting=\(multiLevelOn && multiLevelOff && multiLevelSurvived && orphanPrevented && tieredMarkers && inheritedMarker && normalizedLegacyMarker) markerProportions=\(markerProportionsAreBalanced) bytes=\(data.count)")

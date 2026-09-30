@@ -5,28 +5,16 @@ import UserNotifications
 final class AppController: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate, NSPopoverDelegate, AppStatusMenuTarget {
     private var controllers: [UUID: StickyWindowController] = [:]
     private var statusItem: NSStatusItem!
-    private var selectedNoteIDs: Set<UUID> = []
-    private var selectionOverlay: SelectionOverlayWindowController?
     private var historyPopover: NSPopover?
     private var historyDismissalMonitor: HistoryPopoverDismissalMonitor?
     private var preferencesWindowController: NSWindowController?
     private lazy var newNoteHotKey = GlobalHotKey { [weak self] in self?.createNote() }
-    private var desktopMouseMonitor: Any?
-    private var localMouseMonitor: Any?
-    private var desktopSelectionStart: NSPoint?
-    private var isDesktopSelectionActive = false
-    private var groupDragAnchorID: UUID?
-    private var groupDragAnchorOrigin: NSPoint?
-    private var groupDragInitialFrames: [UUID: NSRect] = [:]
-    private var groupDragLastValidOffset = NSPoint.zero
-    private var isApplyingGroupDrag = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         UNUserNotificationCenter.current().delegate = self
         configureMainMenu()
         configureStatusItem()
-        installDesktopSelectionMonitor()
         newNoteHotKey.register(HotKeyPreferences.newNoteShortcut())
 
         let store = NoteStore.shared
@@ -45,7 +33,6 @@ final class AppController: NSObject, NSApplicationDelegate, UNUserNotificationCe
     }
 
     func createNote(near sourceFrame: NSRect? = nil, in visibleFrame: NSRect? = nil) {
-        setSelection([])
         let frame = sourceFrame.flatMap { source in
             visibleFrame.map {
                 NoteCreationLayout.frame(near: source, size: NoteAppearance.defaultSize, in: $0)
@@ -58,7 +45,6 @@ final class AppController: NSObject, NSApplicationDelegate, UNUserNotificationCe
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [id.uuidString])
         controllers[id]?.close()
         controllers.removeValue(forKey: id)
-        selectedNoteIDs.remove(id)
         NoteStore.shared.complete(id: id)
         dismissHistoryPopover()
     }
@@ -100,7 +86,7 @@ final class AppController: NSObject, NSApplicationDelegate, UNUserNotificationCe
 
     @objc func arrangeNotes() {
         let visibleNotes = NoteStore.shared.activeNotes.filter { !$0.isHidden }
-        let notes = (selectedNoteIDs.isEmpty ? visibleNotes : visibleNotes.filter { selectedNoteIDs.contains($0.id) })
+        let notes = visibleNotes
             .sorted {
                 if $0.createdAt == $1.createdAt { return $0.id.uuidString < $1.id.uuidString }
                 return $0.createdAt < $1.createdAt
@@ -259,178 +245,7 @@ final class AppController: NSObject, NSApplicationDelegate, UNUserNotificationCe
     }
 
     func beginDragging(noteID: UUID, event: NSEvent) {
-        guard let controller = controllers[noteID] else { return }
-        let activeSelection = selectedNoteIDs.filter { controllers[$0]?.window?.isVisible == true }
-        guard activeSelection.contains(noteID), activeSelection.count > 1 else {
-            if !activeSelection.contains(noteID) { setSelection([]) }
-            controller.performWindowDrag(with: event)
-            return
-        }
-
-        let framePairs: [(UUID, NSRect)] = activeSelection.compactMap { id -> (UUID, NSRect)? in
-            guard let frame = controllers[id]?.window?.frame else { return nil }
-            return (id, frame)
-        }
-        let frames = Dictionary(uniqueKeysWithValues: framePairs)
-        guard let anchorFrame = frames[noteID] else { return }
-        groupDragAnchorID = noteID
-        groupDragAnchorOrigin = anchorFrame.origin
-        groupDragInitialFrames = frames
-        groupDragLastValidOffset = .zero
-        controller.performWindowDrag(with: event)
-        var persistedFrames: [UUID: WindowFrame] = [:]
-        for memberID in groupDragInitialFrames.keys {
-            if let frame = controllers[memberID]?.captureCurrentFrame() {
-                persistedFrames[memberID] = frame
-            }
-        }
-        NoteStore.shared.updateFrames(persistedFrames)
-        groupDragAnchorID = nil
-        groupDragAnchorOrigin = nil
-        groupDragInitialFrames = [:]
-        groupDragLastValidOffset = .zero
-    }
-
-    func togglePin(noteID: UUID) {
-        guard let triggeringController = controllers[noteID] else { return }
-        let operation = NoteSelection.pinOperation(
-            triggering: noteID,
-            triggeringIsPinned: triggeringController.isPinned,
-            selectedIDs: selectedNoteIDs
-        )
-
-        for id in operation.ids where id != noteID {
-            controllers[id]?.setPinned(operation.isPinned, focus: false)
-        }
-        triggeringController.setPinned(operation.isPinned, focus: operation.isPinned)
-    }
-
-    func shouldDeferFramePersistence(for id: UUID) -> Bool {
-        groupDragAnchorID != nil && groupDragInitialFrames[id] != nil
-    }
-
-    func noteWindowDidMove(id: UUID, frame: NSRect) {
-        guard !isApplyingGroupDrag,
-              groupDragAnchorID == id,
-              let anchorOrigin = groupDragAnchorOrigin else { return }
-        let translation = NoteSelection.constrainedTranslation(
-            groupDragInitialFrames,
-            from: anchorOrigin,
-            to: frame.origin,
-            fallbackOffset: groupDragLastValidOffset,
-            visibleFrames: NSScreen.screens.map(\.visibleFrame)
-        )
-        if translation.acceptedRequestedOffset { groupDragLastValidOffset = translation.offset }
-        isApplyingGroupDrag = true
-        for (memberID, memberFrame) in translation.frames {
-            controllers[memberID]?.window?.setFrameOrigin(memberFrame.origin)
-        }
-        isApplyingGroupDrag = false
-    }
-
-    private func completeSelection(in rect: NSRect) {
-        let framePairs: [(UUID, NSRect)] = controllers.compactMap { id, controller -> (UUID, NSRect)? in
-            guard controller.window?.isVisible == true, let frame = controller.window?.frame else { return nil }
-            return (id, frame)
-        }
-        let frames = Dictionary(uniqueKeysWithValues: framePairs)
-        setSelection(rect.isEmpty ? [] : NoteSelection.ids(intersecting: rect, noteFrames: frames))
-        closeSelectionOverlay()
-    }
-
-    private func installDesktopSelectionMonitor() {
-        desktopMouseMonitor = NSEvent.addGlobalMonitorForEvents(
-            matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp]
-        ) { [weak self] event in
-            let type = event.type
-            let point = NSEvent.mouseLocation
-            DispatchQueue.main.async { [weak self] in
-                self?.handleDesktopMouse(type: type, point: point)
-            }
-        }
-        localMouseMonitor = NSEvent.addLocalMonitorForEvents(
-            matching: [.leftMouseDragged, .leftMouseUp]
-        ) { [weak self] event in
-            if self?.desktopSelectionStart != nil {
-                self?.handleDesktopMouse(type: event.type, point: NSEvent.mouseLocation)
-            }
-            return event
-        }
-    }
-
-    private func handleDesktopMouse(type: NSEvent.EventType, point: NSPoint) {
-        switch type {
-        case .leftMouseDown:
-            desktopSelectionStart = isDesktopBackground(at: point) ? point : nil
-            isDesktopSelectionActive = false
-        case .leftMouseDragged:
-            guard let start = desktopSelectionStart else { return }
-            if !isDesktopSelectionActive {
-                guard hypot(point.x - start.x, point.y - start.y) >= 4 else { return }
-                beginDesktopSelection(at: start)
-                isDesktopSelectionActive = true
-            }
-            selectionOverlay?.update(to: point, from: start)
-        case .leftMouseUp:
-            guard let start = desktopSelectionStart else { return }
-            if isDesktopSelectionActive {
-                completeSelection(in: NSRect(
-                    x: min(start.x, point.x),
-                    y: min(start.y, point.y),
-                    width: abs(point.x - start.x),
-                    height: abs(point.y - start.y)
-                ))
-            } else {
-                setSelection([])
-            }
-            desktopSelectionStart = nil
-            isDesktopSelectionActive = false
-            closeSelectionOverlay()
-        default:
-            break
-        }
-    }
-
-    private func beginDesktopSelection(at start: NSPoint) {
-        closeSelectionOverlay()
-        guard let desktopFrame = NSScreen.screens.map(\.frame).reduce(Optional<NSRect>.none, { partial, frame in
-            partial.map { $0.union(frame) } ?? frame
-        }) else { return }
-        NSApp.activate(ignoringOtherApps: true)
-        let overlay = SelectionOverlayWindowController(desktopFrame: desktopFrame)
-        selectionOverlay = overlay
-        overlay.begin(at: start)
-    }
-
-    private func isDesktopBackground(at point: NSPoint) -> Bool {
-        guard NSScreen.screens.contains(where: { $0.visibleFrame.contains(point) }) else { return false }
-        let mainDisplayHeight = CGDisplayBounds(CGMainDisplayID()).height
-        let quartzPoint = CGPoint(x: point.x, y: mainDisplayHeight - point.y)
-        guard let windows = CGWindowListCopyWindowInfo(
-            [.optionOnScreenOnly, .excludeDesktopElements],
-            kCGNullWindowID
-        ) as? [[String: Any]] else { return false }
-
-        for info in windows {
-            guard (info[kCGWindowLayer as String] as? NSNumber)?.intValue == 0,
-                  (info[kCGWindowAlpha as String] as? NSNumber)?.doubleValue ?? 0 > 0,
-                  let bounds = info[kCGWindowBounds as String] as? NSDictionary,
-                  let frame = CGRect(dictionaryRepresentation: bounds) else { continue }
-            if frame.contains(quartzPoint) { return false }
-        }
-        return true
-    }
-
-    private func setSelection(_ ids: Set<UUID>) {
-        selectedNoteIDs = ids
-        for (id, controller) in controllers {
-            controller.updateSelection(ids.contains(id))
-        }
-    }
-
-    private func closeSelectionOverlay() {
-        selectionOverlay?.close()
-        selectionOverlay = nil
+        controllers[noteID]?.performWindowDrag(with: event)
     }
 
     /// Gathers every note onto the current desktop, including notes left on

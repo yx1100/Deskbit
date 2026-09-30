@@ -58,6 +58,10 @@ final class StickyWindowController: NSWindowController, NSWindowDelegate, NSText
                 || RichTextFormatting.handleMarkerBackspace(in: self.rootView.textView)
         }
         rootView.textView.onCloseNote = { [weak self] in self?.didTapComplete() }
+        rootView.textView.onPreparePaste = { [weak self] text in
+            guard let self else { return text }
+            return RichTextFormatting.textForPaste(text, in: self.rootView.textView)
+        }
         let repairedBullets = RichTextFormatting.normalizeBulletMarkers(in: rootView.textView)
         let repairedTodos = RichTextFormatting.normalizeTodoMarkers(in: rootView.textView)
         if repairedBullets || repairedTodos {
@@ -106,13 +110,7 @@ final class StickyWindowController: NSWindowController, NSWindowDelegate, NSText
         NoteStore.shared.update(note)
     }
 
-    func windowDidMove(_ notification: Notification) {
-        guard let frame = window?.frame else { return }
-        if appController?.shouldDeferFramePersistence(for: note.id) != true {
-            saveFrame(frame)
-        }
-        appController?.noteWindowDidMove(id: note.id, frame: frame)
-    }
+    func windowDidMove(_ notification: Notification) { saveFrame() }
     func windowDidResize(_ notification: Notification) { saveFrame() }
 
     func windowDidResignKey(_ notification: Notification) {
@@ -128,6 +126,7 @@ final class StickyWindowController: NSWindowController, NSWindowDelegate, NSText
         }
         persistText()
         updateFormattingState()
+        growToFitText()
         // A code block's background spans lines the edit itself did not touch.
         rootView.textView.needsDisplay = true
     }
@@ -142,8 +141,14 @@ final class StickyWindowController: NSWindowController, NSWindowDelegate, NSText
             [.leftMouseDown, .leftMouseDragged, .leftMouseUp].contains(event.type)
                 || (event.type == .keyDown && (123...126).contains(event.keyCode)) // arrow keys
         } ?? false
-        return RichTextFormatting.selectionAvoidingDividers(
+        let avoidingDividers = RichTextFormatting.selectionAvoidingDividers(
             newSelectedCharRange,
+            from: oldSelectedCharRange,
+            isUserMove: isUserMove,
+            in: textView
+        )
+        return RichTextFormatting.selectionAvoidingListMarkers(
+            avoidingDividers,
             from: oldSelectedCharRange,
             isUserMove: isUserMove,
             in: textView
@@ -240,11 +245,7 @@ final class StickyWindowController: NSWindowController, NSWindowDelegate, NSText
     }
 
     func didTapPin() {
-        if let appController {
-            appController.togglePin(noteID: note.id)
-            return
-        }
-        setPinned(!note.isPinned, focus: true)
+        setPinned(!note.isPinned, focus: !note.isPinned)
     }
 
     func setPinned(_ isPinned: Bool, focus: Bool) {
@@ -325,16 +326,6 @@ final class StickyWindowController: NSWindowController, NSWindowDelegate, NSText
         window?.performDrag(with: event)
     }
 
-    func updateSelection(_ isSelected: Bool) {
-        rootView.updateSelection(isSelected)
-    }
-
-    func captureCurrentFrame() -> WindowFrame? {
-        guard let frame = window?.frame else { return nil }
-        note.frame = WindowFrame(frame)
-        return note.frame
-    }
-
     private func persistText() {
         note.text = rootView.textView.string
         if let storage = rootView.textView.textStorage {
@@ -360,6 +351,25 @@ final class StickyWindowController: NSWindowController, NSWindowDelegate, NSText
             isTodoItem: RichTextFormatting.todoState(in: textView) != .plain,
             isCodeBlock: RichTextFormatting.isCodeBlock(in: textView)
         )
+    }
+
+    /// Extends the note downward while its text needs more room, keeping the top edge in place,
+    /// until the bottom reaches the edge of the screen. It never shrinks the note.
+    private func growToFitText() {
+        let textView = rootView.textView
+        guard let layoutManager = textView.layoutManager, let container = textView.textContainer else { return }
+        layoutManager.ensureLayout(for: container)
+        let textHeight = ceil(layoutManager.usedRect(for: container).height + 2 * textView.textContainerInset.height)
+        let needed = textHeight + NoteAppearance.topBarHeight + NoteAppearance.bottomBarHeight
+        let window = windowResidency.activeWindow
+        let frame = window.frame
+        guard needed > frame.height + 0.5,
+              let visible = (window.screen ?? NSScreen.main)?.visibleFrame else { return }
+        let height = min(needed, frame.maxY - visible.minY)
+        guard height > frame.height + 0.5 else { return }
+        let grown = NSRect(x: frame.minX, y: frame.maxY - height, width: frame.width, height: height)
+        window.setFrame(grown, display: true)
+        saveFrame(grown)
     }
 
     private func saveFrame() {

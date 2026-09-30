@@ -231,6 +231,8 @@ final class StickyTextView: NSTextView {
     var onDeleteBackward: (() -> Bool)?
     /// Closes the note, like the 完成 button; used by ⌘W and pressing Esc twice.
     var onCloseNote: (() -> Void)?
+    /// Adjusts plain text before it is pasted, e.g. drops a to-do marker pasted mid-line.
+    var onPreparePaste: ((String) -> String)?
     private var lastEscapeTimestamp: TimeInterval?
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
@@ -363,7 +365,12 @@ final class StickyTextView: NSTextView {
         let images = NoteImages.images(on: pasteboard)
         if !images.isEmpty, NoteImages.insert(images, into: self) { return }
         let start = selectedRange().location
-        super.pasteAsPlainText(sender)
+        if let text = pasteboard.string(forType: .string),
+           let prepared = onPreparePaste?(text), prepared != text {
+            insertText(prepared, replacementRange: selectedRange())
+        } else {
+            super.pasteAsPlainText(sender)
+        }
         let end = selectedRange().location
         NoteLinks.detectLinks(in: self, range: NSRange(location: start, length: max(0, end - start)))
     }
@@ -506,7 +513,8 @@ final class StickyRootView: NSView {
             footer.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -NoteAppearance.barMargin)
         ])
         updateColor(note.color)
-        updateSelection(false)
+        layer?.borderWidth = 0.5
+        layer?.borderColor = NSColor.black.withAlphaComponent(0.12).cgColor
     }
 
     required init?(coder: NSCoder) { nil }
@@ -525,12 +533,5 @@ final class StickyRootView: NSView {
         footer.updateAccent(color.accent)
         noteLayoutManager.checkboxAccent = color.accent
         textView.needsDisplay = true
-    }
-
-    func updateSelection(_ isSelected: Bool) {
-        layer?.borderWidth = isSelected ? 3 : 0.5
-        layer?.borderColor = isSelected
-            ? NSColor.controlAccentColor.withAlphaComponent(0.9).cgColor
-            : NSColor.black.withAlphaComponent(0.12).cgColor
     }
 }
