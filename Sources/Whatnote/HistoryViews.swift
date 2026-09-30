@@ -384,9 +384,10 @@ private final class HistoryNoteRowView: NSView {
     }
 }
 
-/// The bubble asking to confirm deleting one note.
+/// The bubble asking to confirm deleting one note: a short question and two equal buttons.
 @MainActor
 private final class DeleteConfirmationViewController: NSViewController {
+    private static let size = NSSize(width: 200, height: 104)
     private let onConfirm: () -> Void
     private let onCancel: () -> Void
 
@@ -394,42 +395,117 @@ private final class DeleteConfirmationViewController: NSViewController {
         self.onConfirm = onConfirm
         self.onCancel = onCancel
         super.init(nibName: nil, bundle: nil)
+        preferredContentSize = Self.size
     }
 
     required init?(coder: NSCoder) { nil }
 
     override func loadView() {
+        let root = NSView(frame: NSRect(origin: .zero, size: Self.size))
+
         let title = NSTextField(labelWithString: "删除这条便签？")
         title.font = .systemFont(ofSize: 13, weight: .semibold)
-        let detail = NSTextField(labelWithString: "删除后无法恢复。")
+        title.textColor = .labelColor
+        title.alignment = .center
+        let detail = NSTextField(labelWithString: "删除后无法恢复")
         detail.font = .systemFont(ofSize: 11)
         detail.textColor = .secondaryLabelColor
+        detail.alignment = .center
 
-        let cancel = NSButton(title: "取消", target: self, action: #selector(cancel))
-        cancel.bezelStyle = .rounded
+        let cancel = BubbleButton(
+            title: "取消",
+            fill: NSColor.labelColor.withAlphaComponent(0.1),
+            textColor: .labelColor,
+            target: self,
+            action: #selector(cancel)
+        )
         cancel.keyEquivalent = "\u{1b}"
         cancel.setAccessibilityLabel("取消删除")
-        let delete = NSButton(title: "删除", target: self, action: #selector(confirm))
-        delete.bezelStyle = .rounded
+        let delete = BubbleButton(
+            title: "删除",
+            fill: .systemRed,
+            textColor: .white,
+            target: self,
+            action: #selector(confirm)
+        )
         delete.keyEquivalent = "\r"
-        delete.bezelColor = .systemRed
-        delete.hasDestructiveAction = true
         delete.setAccessibilityLabel("确认删除")
-        let buttons = NSStackView(views: [cancel, delete])
-        buttons.orientation = .horizontal
-        buttons.spacing = 8
 
-        let stack = NSStackView(views: [title, detail, buttons])
-        stack.orientation = .vertical
-        stack.alignment = .leading
-        stack.spacing = 4
-        stack.setCustomSpacing(12, after: detail)
-        stack.edgeInsets = NSEdgeInsets(top: 12, left: 14, bottom: 12, right: 14)
-        view = stack
+        for view in [title, detail, cancel, delete] as [NSView] {
+            view.translatesAutoresizingMaskIntoConstraints = false
+            root.addSubview(view)
+        }
+        NSLayoutConstraint.activate([
+            title.topAnchor.constraint(equalTo: root.topAnchor, constant: 14),
+            title.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 14),
+            title.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -14),
+            detail.topAnchor.constraint(equalTo: title.bottomAnchor, constant: 3),
+            detail.leadingAnchor.constraint(equalTo: title.leadingAnchor),
+            detail.trailingAnchor.constraint(equalTo: title.trailingAnchor),
+            cancel.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 14),
+            cancel.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -14),
+            cancel.heightAnchor.constraint(equalToConstant: 28),
+            delete.leadingAnchor.constraint(equalTo: cancel.trailingAnchor, constant: 8),
+            delete.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -14),
+            delete.bottomAnchor.constraint(equalTo: cancel.bottomAnchor),
+            delete.heightAnchor.constraint(equalTo: cancel.heightAnchor),
+            delete.widthAnchor.constraint(equalTo: cancel.widthAnchor)
+        ])
+        view = root
     }
 
     @objc private func confirm() { onConfirm() }
     @objc private func cancel() { onCancel() }
+}
+
+/// A filled capsule button for the confirmation bubble; it draws its own title so the
+/// popover's translucent background cannot wash it out.
+private final class BubbleButton: NSButton {
+    private let label: String
+    private let fill: NSColor
+    private let textColor: NSColor
+    private var isHovered = false { didSet { needsDisplay = true } }
+
+    init(title: String, fill: NSColor, textColor: NSColor, target: AnyObject, action: Selector) {
+        label = title
+        self.fill = fill
+        self.textColor = textColor
+        super.init(frame: .zero)
+        self.target = target
+        self.action = action
+        self.title = ""
+        isBordered = false
+        focusRingType = .none
+        addTrackingArea(NSTrackingArea(
+            rect: .zero,
+            options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        ))
+    }
+
+    required init?(coder: NSCoder) { nil }
+
+    override var allowsVibrancy: Bool { false }
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+    override func mouseEntered(with event: NSEvent) { isHovered = true }
+    override func mouseExited(with event: NSEvent) { isHovered = false }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let capsule = NSBezierPath(roundedRect: bounds, xRadius: bounds.height / 2, yRadius: bounds.height / 2)
+        fill.setFill()
+        capsule.fill()
+        if isHighlighted || isHovered {
+            NSColor.black.withAlphaComponent(isHighlighted ? 0.18 : 0.08).setFill()
+            capsule.fill()
+        }
+        let title = NSAttributedString(string: label, attributes: [
+            .font: NSFont.systemFont(ofSize: 13, weight: .medium),
+            .foregroundColor: textColor
+        ])
+        let size = title.size()
+        title.draw(at: NSPoint(x: bounds.midX - size.width / 2, y: bounds.midY - size.height / 2))
+    }
 }
 
 /// 恢复: a small white capsule with the note's accent color.
