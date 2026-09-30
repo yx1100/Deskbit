@@ -223,6 +223,7 @@ private final class HistoryNoteRowView: NSView {
     private let onDelete: (UUID) -> Void
     private let onHover: (HistoryNoteRowView, Bool) -> Void
     private var isHovered = false { didSet { updateBorder() } }
+    private var hoverArea: NSTrackingArea?
 
     init(
         note: StickyNote,
@@ -248,6 +249,7 @@ private final class HistoryNoteRowView: NSView {
         title.font = .systemFont(ofSize: 13, weight: .medium)
         title.textColor = NoteAppearance.textColor
         title.lineBreakMode = .byTruncatingTail
+        title.allowsExpansionToolTips = false
         title.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
         let completed = NSTextField(labelWithString: Self.formattedDate(note.completedAt))
@@ -287,22 +289,28 @@ private final class HistoryNoteRowView: NSView {
             delete.heightAnchor.constraint(equalToConstant: 26)
         ])
 
-        addTrackingArea(NSTrackingArea(
+        let hoverArea = NSTrackingArea(
             rect: .zero,
             options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
             owner: self,
             userInfo: nil
-        ))
+        )
+        addTrackingArea(hoverArea)
+        self.hoverArea = hoverArea
     }
 
     required init?(coder: NSCoder) { nil }
 
+    // Subviews such as the labels pass their own enter and exit events up to the row; only
+    // the row's own area says whether the mouse is on the row.
     override func mouseEntered(with event: NSEvent) {
+        guard event.trackingArea === hoverArea, !isHovered else { return }
         isHovered = true
         onHover(self, true)
     }
 
     override func mouseExited(with event: NSEvent) {
+        guard event.trackingArea === hoverArea, isHovered else { return }
         isHovered = false
         onHover(self, false)
     }
