@@ -17,10 +17,11 @@ final class HistoryPreviewController {
     private(set) var shownNoteID: UUID?
 
     var isShowing: Bool { panel?.isVisible == true }
+    /// Where the preview is, while it is showing.
+    var shownFrame: NSRect? { isShowing ? panel?.frame : nil }
 
     /// The note under the mouse and its row, or nil when the mouse has left the rows.
     func hover(_ note: StickyNote?, row: NSView?) {
-        NSLog("[预览诊断] hover 有便签=%@ 有行=%@ 正在显示=%@", "\(note != nil)", "\(row != nil)", "\(isShowing)")
         generation += 1
         guard let note, let row else {
             schedule(after: Self.hideDelay) { [weak self] in self?.hide() }
@@ -37,14 +38,12 @@ final class HistoryPreviewController {
     }
 
     func hide() {
-        NSLog("[预览诊断] hide")
         generation += 1
         panel?.orderOut(nil)
         shownNoteID = nil
     }
 
     func show(_ note: StickyNote, beside row: NSView) {
-        NSLog("[预览诊断] show 行有窗口=%@", "\(row.window != nil)")
         guard let anchor = row.window else { return }
         let visible = anchor.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? anchor.frame
         let content = HistoryPreviewView(
@@ -54,23 +53,19 @@ final class HistoryPreviewController {
         )
         let panel = self.panel ?? Self.makePanel()
         self.panel = panel
-        panel.contentView = content
         let rowRect = anchor.convertToScreen(row.convert(row.bounds, to: nil))
         // The popover's own content, not its window, which has room around it for the arrow.
         let popoverRect = anchor.contentView.map { anchor.convertToScreen($0.convert($0.bounds, to: nil)) } ?? anchor.frame
+        // Size the panel first: a content view takes on the size of the window it is put in.
         panel.setFrame(
             Self.frame(size: content.frame.size, rowRect: rowRect, anchor: popoverRect, visible: visible),
-            display: true
+            display: false
         )
+        panel.contentView = content
         panel.level = NSWindow.Level(rawValue: max(anchor.level.rawValue, NSWindow.Level.popUpMenu.rawValue))
         panel.alphaValue = 1
         panel.invalidateShadow()
         panel.orderFrontRegardless()
-        NSLog(
-            "[预览诊断] 卡片 frame=%@ 可见=%@ 层级=%ld 弹出框层级=%ld 弹出框=%@ 屏幕=%@",
-            NSStringFromRect(panel.frame), "\(panel.isVisible)", panel.level.rawValue, anchor.level.rawValue,
-            NSStringFromRect(popoverRect), NSStringFromRect(visible)
-        )
         shownNoteID = note.id
     }
 
@@ -88,7 +83,6 @@ final class HistoryPreviewController {
     private func schedule(after delay: TimeInterval, _ action: @escaping () -> Void) {
         let scheduled = generation
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-            NSLog("[预览诊断] 延时到 控制器在=%@ 仍有效=%@", "\(self != nil)", "\(self?.generation == scheduled)")
             guard let self, self.generation == scheduled else { return }
             action()
         }

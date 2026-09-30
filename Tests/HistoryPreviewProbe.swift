@@ -61,7 +61,10 @@ struct HistoryPreviewProbe {
         controller.hover(short, row: rowView)
         guard !controller.isShowing else { exit(6) }
         RunLoop.main.run(until: Date().addingTimeInterval(HistoryPreviewController.showDelay + 0.4))
-        guard controller.isShowing, controller.shownNoteID == short.id else { exit(7) }
+        guard controller.isShowing,
+              controller.shownNoteID == short.id,
+              controller.shownFrame?.width == HistoryPreviewController.width,
+              (controller.shownFrame?.height ?? 0) > 40 else { exit(7) }
         controller.hover(nil, row: nil)
         RunLoop.main.run(until: Date().addingTimeInterval(HistoryPreviewController.hideDelay + 0.4))
         guard !controller.isShowing else { exit(8) }
