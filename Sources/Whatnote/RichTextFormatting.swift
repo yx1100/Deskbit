@@ -391,21 +391,29 @@ enum RichTextFormatting {
 
     /// The cursor never stops inside a list or to-do marker such as "☐ ", "• " or "1. ": it goes
     /// to the start of the item's text. Moving left from there goes on to the line above.
+    /// A selection within one item (⇧⌘←, dragging) covers only its text, not the marker.
     static func selectionAvoidingListMarkers(
         _ proposed: NSRange,
         from old: NSRange,
         isUserMove: Bool,
         in textView: NSTextView
     ) -> NSRange {
-        guard isUserMove, proposed.length == 0, let storage = textView.textStorage, storage.length > 0 else { return proposed }
+        guard isUserMove, let storage = textView.textStorage, storage.length > 0 else { return proposed }
         let string = storage.string as NSString
         let lookup = min(proposed.location, string.length - 1)
         if proposed.location >= string.length, string.character(at: string.length - 1) == 0x0A { return proposed }
-        let start = string.paragraphRange(for: NSRange(location: lookup, length: 0)).location
+        let paragraph = string.paragraphRange(for: NSRange(location: lookup, length: 0))
+        let start = paragraph.location
         guard !CodeBlock.isCodeLine(in: storage, at: start),
               let length = ListMarker.length(in: string, atParagraphStart: start),
               proposed.location < start + length else { return proposed }
         let textStart = start + length
+        if proposed.length > 0 {
+            // Selections reaching into other lines keep the markers, so whole items can be copied.
+            guard NSMaxRange(proposed) <= NSMaxRange(paragraph) else { return proposed }
+            let end = max(NSMaxRange(proposed), textStart)
+            return NSRange(location: textStart, length: end - textStart)
+        }
         if old.length == 0, old.location == textStart, proposed.location < old.location, start > 0 {
             return NSRange(location: start - 1, length: 0)
         }
