@@ -1,7 +1,8 @@
 import AppKit
 
-/// The 已完成的便签 popover: a fixed-width list of completed notes. Restoring a note removes
-/// its row and keeps the popover open, so several notes can be restored one after another.
+/// The 已完成的便签 popover: a fixed-width list of completed notes. Restoring or deleting a
+/// note removes its row and keeps the popover open, so several notes can be handled in a row.
+/// Deleting one note is confirmed in a small bubble next to its trash button.
 @MainActor
 final class HistoryPopoverViewController: NSViewController {
     static let width: CGFloat = 320
@@ -15,6 +16,7 @@ final class HistoryPopoverViewController: NSViewController {
 
     private(set) var notes: [StickyNote]
     private let onRestore: (UUID) -> Void
+    /// Called once the deletion is confirmed.
     private let onDelete: (UUID) -> Void
     private let onClear: () -> Void
     /// The note under the mouse and its row, or nil when the mouse leaves the rows.
@@ -26,6 +28,12 @@ final class HistoryPopoverViewController: NSViewController {
     private var heightConstraint: NSLayoutConstraint?
     private var documentHeightConstraint: NSLayoutConstraint?
     private var hoveredNoteID: UUID?
+    private var confirmation: NSPopover?
+    /// The note whose deletion is waiting for confirmation.
+    private(set) var pendingDeleteID: UUID?
+
+    /// The delete confirmation bubble's window, while it is open. Clicks there belong to the list.
+    var confirmationWindow: NSWindow? { confirmation?.contentViewController?.view.window }
 
     init(
         notes: [StickyNote],
@@ -141,7 +149,7 @@ final class HistoryPopoverViewController: NSViewController {
                 let row = HistoryNoteRowView(
                     note: note,
                     onRestore: { [weak self] id in self?.restore(id) },
-                    onDelete: onDelete,
+                    onDelete: { [weak self] id, button in self?.askToDelete(id, from: button) },
                     onHover: { [weak self] row, isHovered in self?.rowHoverChanged(row, isHovered: isHovered) }
                 )
                 list.addArrangedSubview(row)
@@ -162,8 +170,52 @@ final class HistoryPopoverViewController: NSViewController {
         documentHeightConstraint?.constant = max(Self.listHeight(forNoteCount: notes.count), height - Self.chromeHeight)
     }
 
+    override func viewWillDisappear() {
+        super.viewWillDisappear()
+        cancelPendingDelete()
+    }
+
     private func restore(_ id: UUID) {
         onRestore(id)
+        removeRow(id)
+    }
+
+    private func askToDelete(_ id: UUID, from button: NSView) {
+        closeConfirmation()
+        pendingDeleteID = id
+        guard button.window != nil else { return }
+        let popover = NSPopover()
+        popover.behavior = .transient
+        popover.animates = true
+        popover.contentViewController = DeleteConfirmationViewController(
+            onConfirm: { [weak self] in self?.confirmPendingDelete() },
+            onCancel: { [weak self] in self?.cancelPendingDelete() }
+        )
+        confirmation = popover
+        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+    }
+
+    func confirmPendingDelete() {
+        guard let id = pendingDeleteID else { return }
+        pendingDeleteID = nil
+        closeConfirmation()
+        onDelete(id)
+        removeRow(id)
+    }
+
+    private func cancelPendingDelete() {
+        pendingDeleteID = nil
+        closeConfirmation()
+    }
+
+    private func closeConfirmation() {
+        guard let popover = confirmation else { return }
+        confirmation = nil
+        // Its buttons may still be handling the click that closes it.
+        DispatchQueue.main.async { popover.close() }
+    }
+
+    private func removeRow(_ id: UUID) {
         notes.removeAll { $0.id == id }
         if hoveredNoteID != nil {
             hoveredNoteID = nil
@@ -220,7 +272,8 @@ private final class FlippedHistoryDocumentView: NSView {
 private final class HistoryNoteRowView: NSView {
     let note: StickyNote
     private let onRestore: (UUID) -> Void
-    private let onDelete: (UUID) -> Void
+    /// Asks to delete the note; the view is the trash button, where the confirmation appears.
+    private let onDelete: (UUID, NSView) -> Void
     private let onHover: (HistoryNoteRowView, Bool) -> Void
     private var isHovered = false { didSet { updateBorder() } }
     private var hoverArea: NSTrackingArea?
@@ -228,7 +281,7 @@ private final class HistoryNoteRowView: NSView {
     init(
         note: StickyNote,
         onRestore: @escaping (UUID) -> Void,
-        onDelete: @escaping (UUID) -> Void,
+        onDelete: @escaping (UUID, NSView) -> Void,
         onHover: @escaping (HistoryNoteRowView, Bool) -> Void
     ) {
         self.note = note
@@ -270,7 +323,7 @@ private final class HistoryNoteRowView: NSView {
         restore.setAccessibilityLabel("恢复便签")
         addSubview(restore)
 
-        let delete = HistoryDeleteButton(target: self, action: #selector(deleteNote))
+        let delete = HistoryDeleteButton(target: self, action: #selector(deleteNote(_:)))
         delete.toolTip = "删除"
         delete.setAccessibilityLabel("删除便签")
         addSubview(delete)
@@ -320,7 +373,7 @@ private final class HistoryNoteRowView: NSView {
     }
 
     @objc private func restoreNote() { onRestore(note.id) }
-    @objc private func deleteNote() { onDelete(note.id) }
+    @objc private func deleteNote(_ sender: NSButton) { onDelete(note.id, sender) }
 
     private static func formattedDate(_ date: Date?) -> String {
         guard let date else { return "完成时间未知" }
@@ -329,6 +382,54 @@ private final class HistoryNoteRowView: NSView {
         formatter.setLocalizedDateFormatFromTemplate("MMMdjm")
         return formatter.string(from: date)
     }
+}
+
+/// The bubble asking to confirm deleting one note.
+@MainActor
+private final class DeleteConfirmationViewController: NSViewController {
+    private let onConfirm: () -> Void
+    private let onCancel: () -> Void
+
+    init(onConfirm: @escaping () -> Void, onCancel: @escaping () -> Void) {
+        self.onConfirm = onConfirm
+        self.onCancel = onCancel
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) { nil }
+
+    override func loadView() {
+        let title = NSTextField(labelWithString: "删除这条便签？")
+        title.font = .systemFont(ofSize: 13, weight: .semibold)
+        let detail = NSTextField(labelWithString: "删除后无法恢复。")
+        detail.font = .systemFont(ofSize: 11)
+        detail.textColor = .secondaryLabelColor
+
+        let cancel = NSButton(title: "取消", target: self, action: #selector(cancel))
+        cancel.bezelStyle = .rounded
+        cancel.keyEquivalent = "\u{1b}"
+        cancel.setAccessibilityLabel("取消删除")
+        let delete = NSButton(title: "删除", target: self, action: #selector(confirm))
+        delete.bezelStyle = .rounded
+        delete.keyEquivalent = "\r"
+        delete.bezelColor = .systemRed
+        delete.hasDestructiveAction = true
+        delete.setAccessibilityLabel("确认删除")
+        let buttons = NSStackView(views: [cancel, delete])
+        buttons.orientation = .horizontal
+        buttons.spacing = 8
+
+        let stack = NSStackView(views: [title, detail, buttons])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 4
+        stack.setCustomSpacing(12, after: detail)
+        stack.edgeInsets = NSEdgeInsets(top: 12, left: 14, bottom: 12, right: 14)
+        view = stack
+    }
+
+    @objc private func confirm() { onConfirm() }
+    @objc private func cancel() { onCancel() }
 }
 
 /// 恢复: a small white capsule with the note's accent color.
