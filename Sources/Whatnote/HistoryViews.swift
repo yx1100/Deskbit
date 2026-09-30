@@ -235,6 +235,8 @@ private final class HistoryNoteRowView: NSView {
         self.onDelete = onDelete
         self.onHover = onHover
         super.init(frame: .zero)
+        // Rows are light paper whatever the system appearance.
+        appearance = NSAppearance(named: .aqua)
         wantsLayer = true
         layer?.cornerRadius = 10
         layer?.cornerCurve = .continuous
@@ -323,6 +325,7 @@ private final class HistoryNoteRowView: NSView {
 
 /// 恢复: a small white capsule with the note's accent color.
 private final class HistoryRestoreButton: NSButton {
+    private static let label = "恢复"
     private let accent: NSColor
     private var isHovered = false { didSet { needsDisplay = true } }
 
@@ -331,7 +334,8 @@ private final class HistoryRestoreButton: NSButton {
         super.init(frame: .zero)
         self.target = target
         self.action = action
-        title = "恢复"
+        // Drawn below; an empty title keeps AppKit from drawing a second one on top.
+        title = ""
         isBordered = false
         focusRingType = .none
         translatesAutoresizingMaskIntoConstraints = false
@@ -346,14 +350,24 @@ private final class HistoryRestoreButton: NSButton {
     required init?(coder: NSCoder) { nil }
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+    // The popover's translucent background would otherwise wash the capsule out to white.
+    override var allowsVibrancy: Bool { false }
     override func mouseEntered(with event: NSEvent) { isHovered = true }
     override func mouseExited(with event: NSEvent) { isHovered = false }
 
     override func draw(_ dirtyRect: NSRect) {
         let capsule = NSBezierPath(roundedRect: bounds, xRadius: bounds.height / 2, yRadius: bounds.height / 2)
-        NSColor.white.withAlphaComponent(isHighlighted ? 1 : (isHovered ? 0.85 : 0.6)).setFill()
+        NSColor.white.withAlphaComponent(isHighlighted ? 0.95 : (isHovered ? 0.8 : 0.55)).setFill()
         capsule.fill()
-        let label = NSAttributedString(string: title, attributes: [
+        accent.withAlphaComponent(isHovered ? 0.5 : 0.3).setStroke()
+        let outline = NSBezierPath(
+            roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5),
+            xRadius: bounds.height / 2 - 0.5,
+            yRadius: bounds.height / 2 - 0.5
+        )
+        outline.lineWidth = 1
+        outline.stroke()
+        let label = NSAttributedString(string: Self.label, attributes: [
             .font: NSFont.systemFont(ofSize: 12, weight: .semibold),
             .foregroundColor: accent
         ])
@@ -390,6 +404,7 @@ private final class HistoryDeleteButton: NSButton {
     required init?(coder: NSCoder) { nil }
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+    override var allowsVibrancy: Bool { false }
     override func mouseEntered(with event: NSEvent) { isHovered = true }
     override func mouseExited(with event: NSEvent) { isHovered = false }
 

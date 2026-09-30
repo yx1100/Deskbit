@@ -11,15 +11,16 @@ final class HistoryPreviewController {
     static let hideDelay: TimeInterval = 0.15
 
     private var panel: NSPanel?
-    private var pending: Task<Void, Never>?
+    /// Bumped whenever the mouse moves on, so a delayed show or hide that is no longer
+    /// wanted does nothing.
+    private var generation = 0
     private(set) var shownNoteID: UUID?
 
     var isShowing: Bool { panel?.isVisible == true }
 
     /// The note under the mouse and its row, or nil when the mouse has left the rows.
     func hover(_ note: StickyNote?, row: NSView?) {
-        pending?.cancel()
-        pending = nil
+        generation += 1
         guard let note, let row else {
             schedule(after: Self.hideDelay) { [weak self] in self?.hide() }
             return
@@ -35,8 +36,7 @@ final class HistoryPreviewController {
     }
 
     func hide() {
-        pending?.cancel()
-        pending = nil
+        generation += 1
         panel?.orderOut(nil)
         shownNoteID = nil
     }
@@ -53,20 +53,16 @@ final class HistoryPreviewController {
         self.panel = panel
         panel.contentView = content
         let rowRect = anchor.convertToScreen(row.convert(row.bounds, to: nil))
+        // The popover's own content, not its window, which has room around it for the arrow.
+        let popoverRect = anchor.contentView.map { anchor.convertToScreen($0.convert($0.bounds, to: nil)) } ?? anchor.frame
         panel.setFrame(
-            Self.frame(size: content.frame.size, rowRect: rowRect, anchor: anchor.frame, visible: visible),
+            Self.frame(size: content.frame.size, rowRect: rowRect, anchor: popoverRect, visible: visible),
             display: true
         )
-        panel.level = anchor.level.rawValue > NSWindow.Level.floating.rawValue ? anchor.level : .floating
+        panel.level = NSWindow.Level(rawValue: max(anchor.level.rawValue, NSWindow.Level.popUpMenu.rawValue))
+        panel.alphaValue = 1
         panel.invalidateShadow()
-        if !panel.isVisible {
-            panel.alphaValue = 0
-            panel.orderFrontRegardless()
-            NSAnimationContext.runAnimationGroup { context in
-                context.duration = 0.14
-                panel.animator().alphaValue = 1
-            }
-        }
+        panel.orderFrontRegardless()
         shownNoteID = note.id
     }
 
@@ -81,10 +77,10 @@ final class HistoryPreviewController {
         return NSRect(x: x, y: y, width: size.width, height: size.height)
     }
 
-    private func schedule(after delay: TimeInterval, _ action: @escaping @MainActor () -> Void) {
-        pending = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-            guard !Task.isCancelled else { return }
+    private func schedule(after delay: TimeInterval, _ action: @escaping () -> Void) {
+        let scheduled = generation
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            guard let self, self.generation == scheduled else { return }
             action()
         }
     }
