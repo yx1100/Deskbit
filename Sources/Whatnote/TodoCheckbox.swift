@@ -210,7 +210,6 @@ final class NoteLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
         forGlyphRange glyphRange: NSRange
     ) -> Int {
         guard let storage = layoutManager.textStorage else { return 0 }
-        let string = storage.string as NSString
         var properties: [NSLayoutManager.GlyphProperty]?
         for offset in 0..<glyphRange.length where isDrawnAsSpace(charIndexes[offset], in: storage) {
             if properties == nil {
