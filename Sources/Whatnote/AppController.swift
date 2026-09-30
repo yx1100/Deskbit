@@ -7,6 +7,7 @@ final class AppController: NSObject, NSApplicationDelegate, UNUserNotificationCe
     private var statusItem: NSStatusItem!
     private var historyPopover: NSPopover?
     private var historyDismissalMonitor: HistoryPopoverDismissalMonitor?
+    private var historyPreview: HistoryPreviewController?
     private var preferencesWindowController: NSWindowController?
     private lazy var newNoteHotKey = GlobalHotKey { [weak self] in self?.createNote() }
 
@@ -114,22 +115,25 @@ final class AppController: NSObject, NSApplicationDelegate, UNUserNotificationCe
     private func presentHistory(relativeTo sourceView: NSView) {
         dismissHistoryPopover()
         let popover = NSPopover()
-        popover.behavior = .transient
+        // Stays open while notes are restored; a click outside it (or Esc) closes it.
+        popover.behavior = .applicationDefined
         popover.animates = true
         popover.delegate = self
+        let preview = HistoryPreviewController()
+        historyPreview = preview
         popover.contentViewController = HistoryPopoverViewController(
             notes: NoteStore.shared.completedNotes,
             onRestore: { [weak self] id in
-                guard let self else { return }
-                self.dismissHistoryPopover()
-                guard let note = NoteStore.shared.restore(id: id) else { return }
-                self.open(note, focus: true)
+                self?.restoreFromHistory(id: id)
             },
             onDelete: { [weak self] id in
                 self?.confirmDeleteHistoryNote(id: id)
             },
             onClear: { [weak self] in
                 self?.confirmClearHistory()
+            },
+            onHover: { [weak preview] note, row in
+                preview?.hover(note, row: row)
             }
         )
         historyPopover = popover
@@ -142,9 +146,21 @@ final class AppController: NSObject, NSApplicationDelegate, UNUserNotificationCe
         dismissalMonitor.start()
     }
 
+    /// Brings the note back on screen without taking focus from the popover, so the next
+    /// 恢复 works with a single click.
+    private func restoreFromHistory(id: UUID) {
+        guard let note = NoteStore.shared.restore(id: id) else { return }
+        let controller = StickyWindowController(note: note)
+        controller.appController = self
+        controllers[note.id] = controller
+        controller.showWithoutFocus()
+    }
+
     private func dismissHistoryPopover() {
         historyDismissalMonitor?.stop()
         historyDismissalMonitor = nil
+        historyPreview?.hide()
+        historyPreview = nil
         historyPopover?.close()
         historyPopover = nil
     }
@@ -153,6 +169,8 @@ final class AppController: NSObject, NSApplicationDelegate, UNUserNotificationCe
         guard notification.object as? NSPopover === historyPopover else { return }
         historyDismissalMonitor?.stop()
         historyDismissalMonitor = nil
+        historyPreview?.hide()
+        historyPreview = nil
         historyPopover = nil
     }
 

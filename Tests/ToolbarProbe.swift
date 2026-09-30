@@ -12,7 +12,7 @@ struct ToolbarProbe {
 
         let buttons = descendants(of: toolbar).compactMap { $0 as? NSButton }
         let labels = buttons.compactMap { $0.accessibilityLabel() }
-        let expected = ["完成", "蓝色", "绿色", "黄色", "粉色", "新建便签", "置顶", "排列便签"]
+        let expected = ["完成", "粉色", "黄色", "蓝色", "绿色", "新建便签", "置顶", "排列便签"]
         guard labels == expected else { exit(2) }
         guard descendants(of: toolbar).filter({ $0 is GlassCapsuleView }).count == 3 else { exit(1) }
 

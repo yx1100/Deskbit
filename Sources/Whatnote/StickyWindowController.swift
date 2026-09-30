@@ -88,6 +88,12 @@ final class StickyWindowController: NSWindowController, NSWindowDelegate, NSText
         window?.makeFirstResponder(rootView.textView)
     }
 
+    /// Shows the note without making it the key window, e.g. when it is restored while the
+    /// 已完成的便签 list stays open.
+    func showWithoutFocus() {
+        windowResidency.activeWindow.orderFrontRegardless()
+    }
+
     /// Brings the note onto the current desktop (Space) and back on screen.
     func gatherToCurrentDesktop() {
         guard let window else { return }

@@ -9,15 +9,15 @@ struct HistoryViewProbe {
         first.text = "完成的第一条便签"
         first.completedAt = Date(timeIntervalSince1970: 100)
         var second = StickyNote.fresh(index: 1)
-        second.text = "完成的第二条便签"
+        second.text = "☐ 完成的第二条便签，标题很长很长很长很长很长很长很长很长很长很长很长很长很长很长很长"
         second.completedAt = Date(timeIntervalSince1970: 200)
 
-        var restoredID: UUID?
+        var restoredIDs: [UUID] = []
         var deletedID: UUID?
         var clearCount = 0
         let controller = HistoryPopoverViewController(
             notes: [second, first],
-            onRestore: { restoredID = $0 },
+            onRestore: { restoredIDs.append($0) },
             onDelete: { deletedID = $0 },
             onClear: { clearCount += 1 }
         )
@@ -25,18 +25,20 @@ struct HistoryViewProbe {
         controller.view.frame = NSRect(origin: .zero, size: controller.preferredContentSize)
         controller.view.layoutSubtreeIfNeeded()
 
-        guard controller.preferredContentSize.width == 340,
+        // A long title is cut short; the popover keeps its fixed width.
+        guard controller.preferredContentSize.width == HistoryPopoverViewController.width,
+              controller.view.fittingSize.width == HistoryPopoverViewController.width,
               controller.preferredContentSize.height >= 180 else { exit(1) }
-        let controls = descendants(of: controller.view).compactMap { $0 as? NSControl }
-        let labels = controls.compactMap { $0.accessibilityLabel() }
+        var controls = descendants(of: controller.view).compactMap { $0 as? NSControl }
+        var labels = controls.compactMap { $0.accessibilityLabel() }
         guard labels.filter({ $0 == "恢复便签" }).count == 2,
               labels.filter({ $0 == "删除便签" }).count == 2,
-              labels.contains("删除所有已完成的便签") else { exit(2) }
+              labels.contains("删除所有已完成的便签"),
+              texts(in: controller.view).contains("2 条") else { exit(2) }
 
-        controls.first(where: { $0.accessibilityLabel() == "恢复便签" })?.performClick(nil)
         controls.first(where: { $0.accessibilityLabel() == "删除便签" })?.performClick(nil)
         controls.first(where: { $0.accessibilityLabel() == "删除所有已完成的便签" })?.performClick(nil)
-        guard restoredID == second.id, deletedID == second.id, clearCount == 1 else { exit(3) }
+        guard deletedID == second.id, clearCount == 1 else { exit(3) }
 
         if let capturePath = CommandLine.arguments.dropFirst().first(where: { $0.hasSuffix(".png") }),
            let bitmap = controller.view.bitmapImageRepForCachingDisplay(in: controller.view.bounds) {
@@ -46,6 +48,23 @@ struct HistoryViewProbe {
             }
         }
 
+        // Restoring removes the row and keeps the list open for the next one.
+        controls.first(where: { $0.accessibilityLabel() == "恢复便签" })?.performClick(nil)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+        controls = descendants(of: controller.view).compactMap { $0 as? NSControl }
+        labels = controls.compactMap { $0.accessibilityLabel() }
+        guard restoredIDs == [second.id],
+              controller.notes.map(\.id) == [first.id],
+              labels.filter({ $0 == "恢复便签" }).count == 1,
+              texts(in: controller.view).contains("1 条") else { exit(6) }
+        controls.first(where: { $0.accessibilityLabel() == "恢复便签" })?.performClick(nil)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+        guard restoredIDs == [second.id, first.id],
+              texts(in: controller.view).contains("没有已完成的便签"),
+              texts(in: controller.view).contains("0 条"),
+              (descendants(of: controller.view).compactMap { $0 as? NSControl }
+                .first(where: { $0.accessibilityLabel() == "删除所有已完成的便签" }))?.isEnabled == false else { exit(7) }
+
         let emptyController = HistoryPopoverViewController(
             notes: [],
             onRestore: { _ in },
@@ -53,9 +72,7 @@ struct HistoryViewProbe {
             onClear: {}
         )
         emptyController.loadView()
-        let emptyLabels = descendants(of: emptyController.view)
-            .compactMap { ($0 as? NSTextField)?.stringValue }
-        guard emptyLabels.contains("没有已完成的便签") else { exit(4) }
+        guard texts(in: emptyController.view).contains("没有已完成的便签") else { exit(4) }
 
         let manyNotes = (0..<8).map { index -> StickyNote in
             var note = StickyNote.fresh(index: index)
@@ -72,12 +89,22 @@ struct HistoryViewProbe {
         scrollingController.loadView()
         scrollingController.view.frame = NSRect(origin: .zero, size: scrollingController.preferredContentSize)
         scrollingController.view.layoutSubtreeIfNeeded()
-        guard scrollingController.preferredContentSize.height == 420,
+        guard scrollingController.preferredContentSize.height == HistoryPopoverViewController.maximumHeight,
               let scrollView = descendants(of: scrollingController.view).compactMap({ $0 as? NSScrollView }).first,
               let documentView = scrollView.documentView,
               documentView.frame.height > scrollView.contentView.bounds.height else { exit(5) }
 
+        // Titles skip list markers, dividers and blank lines.
+        guard HistoryNoteTitle.title(for: "☐ 买牛奶") == "买牛奶",
+              HistoryNoteTitle.title(for: "\n---\n• 第一项") == "第一项",
+              HistoryNoteTitle.title(for: "  ") == "空白便签" else { exit(8) }
+
         print("history popover: pass")
+    }
+
+    @MainActor
+    private static func texts(in root: NSView) -> [String] {
+        descendants(of: root).compactMap { ($0 as? NSTextField)?.stringValue }
     }
 
     @MainActor
