@@ -17,7 +17,7 @@
 - 粘贴或拖入图片，网址自动成为链接
 - 全局快捷键在任何 App 中新建便签
 - 置顶便签显示在所有桌面
-- 已完成的便签可恢复或删除
+- 已完成的便签可预览、恢复或删除
 - 数据保存在本机：`~/Library/Application Support/Whatnote/notes.json`
 
 需要 Apple Silicon Mac，macOS 11 或更高版本。

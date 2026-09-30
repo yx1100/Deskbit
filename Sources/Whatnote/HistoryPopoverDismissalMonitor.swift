@@ -6,6 +6,7 @@ final class HistoryPopoverDismissalMonitor {
     private let onDismiss: () -> Void
     private var localMonitor: Any?
     private var globalMonitor: Any?
+    private var keyMonitor: Any?
 
     init(popoverWindow: @escaping () -> NSWindow?, onDismiss: @escaping () -> Void) {
         self.popoverWindow = popoverWindow
@@ -23,6 +24,10 @@ final class HistoryPopoverDismissalMonitor {
             [weak self] _ in
             self?.handleGlobalMouseDown()
         }
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self, self.handleKeyDown(keyCode: event.keyCode, in: event.window) else { return event }
+            return nil
+        }
     }
 
     func stop() {
@@ -34,6 +39,10 @@ final class HistoryPopoverDismissalMonitor {
             NSEvent.removeMonitor(globalMonitor)
             self.globalMonitor = nil
         }
+        if let keyMonitor {
+            NSEvent.removeMonitor(keyMonitor)
+            self.keyMonitor = nil
+        }
     }
 
     func handleLocalMouseDown(in window: NSWindow?) {
@@ -43,5 +52,12 @@ final class HistoryPopoverDismissalMonitor {
 
     func handleGlobalMouseDown() {
         onDismiss()
+    }
+
+    /// Esc in the popover closes it. Returns whether the key was used.
+    func handleKeyDown(keyCode: UInt16, in window: NSWindow?) -> Bool {
+        guard keyCode == 53, window != nil, window === popoverWindow() else { return false }
+        onDismiss()
+        return true
     }
 }
