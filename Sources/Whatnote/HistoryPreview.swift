@@ -20,6 +20,7 @@ final class HistoryPreviewController {
 
     /// The note under the mouse and its row, or nil when the mouse has left the rows.
     func hover(_ note: StickyNote?, row: NSView?) {
+        NSLog("[预览诊断] hover 有便签=%@ 有行=%@ 正在显示=%@", "\(note != nil)", "\(row != nil)", "\(isShowing)")
         generation += 1
         guard let note, let row else {
             schedule(after: Self.hideDelay) { [weak self] in self?.hide() }
@@ -36,12 +37,14 @@ final class HistoryPreviewController {
     }
 
     func hide() {
+        NSLog("[预览诊断] hide")
         generation += 1
         panel?.orderOut(nil)
         shownNoteID = nil
     }
 
     func show(_ note: StickyNote, beside row: NSView) {
+        NSLog("[预览诊断] show 行有窗口=%@", "\(row.window != nil)")
         guard let anchor = row.window else { return }
         let visible = anchor.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? anchor.frame
         let content = HistoryPreviewView(
@@ -63,6 +66,11 @@ final class HistoryPreviewController {
         panel.alphaValue = 1
         panel.invalidateShadow()
         panel.orderFrontRegardless()
+        NSLog(
+            "[预览诊断] 卡片 frame=%@ 可见=%@ 层级=%d 弹出框层级=%d 弹出框=%@ 屏幕=%@",
+            NSStringFromRect(panel.frame), "\(panel.isVisible)", panel.level.rawValue, anchor.level.rawValue,
+            NSStringFromRect(popoverRect), NSStringFromRect(visible)
+        )
         shownNoteID = note.id
     }
 
@@ -80,6 +88,7 @@ final class HistoryPreviewController {
     private func schedule(after delay: TimeInterval, _ action: @escaping () -> Void) {
         let scheduled = generation
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            NSLog("[预览诊断] 延时到 控制器在=%@ 仍有效=%@", "\(self != nil)", "\(self?.generation == scheduled)")
             guard let self, self.generation == scheduled else { return }
             action()
         }

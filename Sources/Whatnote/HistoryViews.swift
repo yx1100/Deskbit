@@ -176,6 +176,7 @@ final class HistoryPopoverViewController: NSViewController {
     }
 
     private func rowHoverChanged(_ row: HistoryNoteRowView, isHovered: Bool) {
+        NSLog("[预览诊断] 列表收到悬停=%@", "\(isHovered)")
         if isHovered {
             hoveredNoteID = row.note.id
             onHover(row.note, row)
@@ -304,12 +305,14 @@ private final class HistoryNoteRowView: NSView {
     // Subviews such as the labels pass their own enter and exit events up to the row; only
     // the row's own area says whether the mouse is on the row.
     override func mouseEntered(with event: NSEvent) {
+        NSLog("[预览诊断] 行 mouseEntered 自己区域=%@ 已悬停=%@", "\(event.trackingArea === hoverArea)", "\(isHovered)")
         guard event.trackingArea === hoverArea, !isHovered else { return }
         isHovered = true
         onHover(self, true)
     }
 
     override func mouseExited(with event: NSEvent) {
+        NSLog("[预览诊断] 行 mouseExited 自己区域=%@ 已悬停=%@", "\(event.trackingArea === hoverArea)", "\(isHovered)")
         guard event.trackingArea === hoverArea, isHovered else { return }
         isHovered = false
         onHover(self, false)

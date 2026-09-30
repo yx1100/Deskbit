@@ -133,6 +133,7 @@ final class AppController: NSObject, NSApplicationDelegate, UNUserNotificationCe
                 self?.confirmClearHistory()
             },
             onHover: { [weak preview] note, row in
+                NSLog("[预览诊断] AppController 收到悬停 预览控制器在=%@", "\(preview != nil)")
                 preview?.hover(note, row: row)
             }
         )
