@@ -67,7 +67,7 @@ final class HistoryPreviewController {
         panel.invalidateShadow()
         panel.orderFrontRegardless()
         NSLog(
-            "[预览诊断] 卡片 frame=%@ 可见=%@ 层级=%d 弹出框层级=%d 弹出框=%@ 屏幕=%@",
+            "[预览诊断] 卡片 frame=%@ 可见=%@ 层级=%ld 弹出框层级=%ld 弹出框=%@ 屏幕=%@",
             NSStringFromRect(panel.frame), "\(panel.isVisible)", panel.level.rawValue, anchor.level.rawValue,
             NSStringFromRect(popoverRect), NSStringFromRect(visible)
         )
