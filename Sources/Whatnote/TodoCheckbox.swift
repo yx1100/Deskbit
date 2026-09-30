@@ -23,6 +23,38 @@ enum TodoMarker {
     }
 }
 
+/// The marker that starts a list line: a to-do marker ("☐ "), a bullet ("• ") or a number
+/// ("12. "). The space after it is drawn as a fixed gap, and the cursor never stops inside it.
+enum ListMarker {
+    /// Width of the gap between a marker and its text, drawn in place of the space.
+    static let spacing: CGFloat = 5
+    private static let symbols: Set<unichar> = [
+        0x2610, 0x2611, // ☐ ☑
+        0x2022, 0x2218, 0x25AA, // • ∘ ▪
+        0x25E6, 0x25CB // ◦ ○ (older bullets)
+    ]
+
+    /// Length of the marker, space included, at the start of the paragraph at `start`.
+    static func length(in string: NSString, atParagraphStart start: Int) -> Int? {
+        guard start < string.length else { return nil }
+        if start + 1 < string.length, symbols.contains(string.character(at: start)), string.character(at: start + 1) == 0x20 {
+            return 2
+        }
+        var index = start
+        while index < string.length, index - start < 4, (0x30...0x39).contains(string.character(at: index)) { index += 1 }
+        guard index > start, index + 1 < string.length,
+              string.character(at: index) == 0x2E, string.character(at: index + 1) == 0x20 else { return nil }
+        return index - start + 2
+    }
+
+    /// Whether the character at `index` is the space ending a list marker.
+    static func isMarkerSpace(in string: NSString, at index: Int) -> Bool {
+        guard index > 0, index < string.length, string.character(at: index) == 0x20 else { return false }
+        let start = string.paragraphRange(for: NSRange(location: index, length: 0)).location
+        return length(in: string, atParagraphStart: start).map { start + $0 - 1 == index } ?? false
+    }
+}
+
 /// A paragraph holding only "---", "***" or "___" (three or more) is a Markdown divider.
 /// The text stays in the note and is drawn as a thin horizontal line.
 enum DividerLine {
@@ -178,10 +210,8 @@ final class NoteLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
         forGlyphRange glyphRange: NSRange
     ) -> Int {
         guard let storage = layoutManager.textStorage else { return 0 }
-        let string = storage.string as NSString
         var properties: [NSLayoutManager.GlyphProperty]?
-        for offset in 0..<glyphRange.length
-        where TodoMarker.isCompleted(in: string, at: charIndexes[offset]) != nil {
+        for offset in 0..<glyphRange.length where isDrawnAsSpace(charIndexes[offset], in: storage) {
             if properties == nil {
                 properties = Array(UnsafeBufferPointer(start: props, count: glyphRange.length))
             }
@@ -260,13 +290,20 @@ final class NoteLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
         return storage.attribute(.paragraphStyle, at: index, effectiveRange: nil) as? NSParagraphStyle
     }
 
+    /// To-do markers (drawn as checkboxes) and the space after any list marker (drawn as a
+    /// fixed gap) are laid out as blank space of a set width.
+    private func isDrawnAsSpace(_ charIndex: Int, in storage: NSTextStorage) -> Bool {
+        let string = storage.string as NSString
+        if TodoMarker.isCompleted(in: string, at: charIndex) != nil { return true }
+        return ListMarker.isMarkerSpace(in: string, at: charIndex) && !CodeBlock.isCodeLine(in: storage, at: charIndex)
+    }
+
     func layoutManager(
         _ layoutManager: NSLayoutManager,
         shouldUse action: NSLayoutManager.ControlCharacterAction,
         forControlCharacterAt charIndex: Int
     ) -> NSLayoutManager.ControlCharacterAction {
-        guard let storage = layoutManager.textStorage,
-              TodoMarker.isCompleted(in: storage.string as NSString, at: charIndex) != nil else { return action }
+        guard let storage = layoutManager.textStorage, isDrawnAsSpace(charIndex, in: storage) else { return action }
         return .whitespace
     }
 
@@ -278,8 +315,11 @@ final class NoteLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
         glyphPosition: NSPoint,
         characterIndex charIndex: Int
     ) -> NSRect {
-        let font = layoutManager.textStorage?.attribute(.font, at: charIndex, effectiveRange: nil) as? NSFont
-            ?? NoteAppearance.bodyFont()
+        guard let storage = layoutManager.textStorage else { return .zero }
+        if (storage.string as NSString).character(at: charIndex) == 0x20 {
+            return NSRect(x: glyphPosition.x, y: glyphPosition.y, width: ListMarker.spacing, height: 0)
+        }
+        let font = storage.attribute(.font, at: charIndex, effectiveRange: nil) as? NSFont ?? NoteAppearance.bodyFont()
         return NSRect(x: glyphPosition.x, y: glyphPosition.y, width: TodoCheckbox.markerWidth(for: font), height: 0)
     }
 

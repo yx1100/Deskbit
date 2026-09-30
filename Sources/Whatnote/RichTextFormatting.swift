@@ -389,6 +389,46 @@ enum RichTextFormatting {
         return NSRange(location: divider.location, length: 0)
     }
 
+    /// The cursor never stops inside a list or to-do marker such as "☐ ", "• " or "1. ": it goes
+    /// to the start of the item's text. Moving left from there goes on to the line above.
+    static func selectionAvoidingListMarkers(
+        _ proposed: NSRange,
+        from old: NSRange,
+        isUserMove: Bool,
+        in textView: NSTextView
+    ) -> NSRange {
+        guard isUserMove, proposed.length == 0, let storage = textView.textStorage, storage.length > 0 else { return proposed }
+        let string = storage.string as NSString
+        let lookup = min(proposed.location, string.length - 1)
+        if proposed.location >= string.length, string.character(at: string.length - 1) == 0x0A { return proposed }
+        let start = string.paragraphRange(for: NSRange(location: lookup, length: 0)).location
+        guard !CodeBlock.isCodeLine(in: storage, at: start),
+              let length = ListMarker.length(in: string, atParagraphStart: start),
+              proposed.location < start + length else { return proposed }
+        let textStart = start + length
+        if old.length == 0, old.location == textStart, proposed.location < old.location, start > 0 {
+            return NSRange(location: start - 1, length: 0)
+        }
+        return NSRange(location: textStart, length: 0)
+    }
+
+    /// Plain text about to be pasted. A marker only means something at the start of a line, so
+    /// it is dropped from the start of the pasted text when the cursor is after other text or
+    /// already after a marker; it would otherwise show up as a stray "☐".
+    static func textForPaste(_ text: String, in textView: NSTextView) -> String {
+        guard let storage = textView.textStorage, storage.length > 0 else { return text }
+        let string = storage.string as NSString
+        let location = textView.selectedRange().location
+        if location >= string.length, string.character(at: string.length - 1) == 0x0A { return text }
+        let start = string.paragraphRange(for: NSRange(location: min(location, string.length - 1), length: 0)).location
+        let pasted = text as NSString
+        guard location > start, let markerLength = ListMarker.length(in: pasted, atParagraphStart: 0) else { return text }
+        let pastesTodo = TodoMarker.isCompleted(in: pasted, at: 0) != nil
+        let afterMarker = ListMarker.length(in: string, atParagraphStart: start).map { start + $0 == location } ?? false
+        guard pastesTodo || afterMarker else { return text }
+        return pasted.substring(from: markerLength)
+    }
+
     /// Backspace at the start of the line below a divider deletes the divider's last dash
     /// rather than the hidden line break, and moves the cursor to where that dash was.
     /// At a divider's left end Backspace works as usual and joins it to the line above.
