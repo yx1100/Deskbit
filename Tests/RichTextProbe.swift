@@ -536,7 +536,14 @@ struct RichTextProbe {
                 in: markerCursorEditor
             ).location
         }
-        let markerCursor = skipped(3, from: 0) == 4 && skipped(2, from: 0) == 4
+        // ⇧⌘← from the end of "☐ 买" selects only "买"; a selection into the next line keeps markers.
+        let lineSelection = RichTextFormatting.selectionAvoidingListMarkers(
+            NSRange(location: 2, length: 3), from: NSRange(location: 5, length: 0), isUserMove: true, in: markerCursorEditor
+        ) == NSRange(location: 4, length: 1)
+        let multiLineSelection = RichTextFormatting.selectionAvoidingListMarkers(
+            NSRange(location: 2, length: 6), from: NSRange(location: 8, length: 0), isUserMove: true, in: markerCursorEditor
+        ) == NSRange(location: 2, length: 6)
+        let markerCursor = lineSelection && multiLineSelection && skipped(3, from: 0) == 4 && skipped(2, from: 0) == 4
             && skipped(3, from: 4) == 1 && skipped(7, from: 0) == 9
             && skipped(4, from: 0) == 4 && skipped(3, from: 0, userMove: false) == 3
         func pasted(_ text: String, into existing: String, at location: Int) -> String {
