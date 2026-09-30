@@ -23,8 +23,10 @@ jobs:
           failed=0
           for test_script in scripts/test-*.sh; do
             echo "::group::$test_script"
-            if ! "$test_script"; then
-              echo "::error::$test_script failed"
+            status=0
+            "$test_script" || status=$?
+            if [ "$status" -ne 0 ]; then
+              echo "::error::$test_script failed with exit code $status"
               failed=1
             fi
             echo "::endgroup::"
